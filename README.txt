@@ -21,3 +21,14 @@ return datas.
 
 Autonomie provides all the models that should be used to store task execution
 related stuff (see autonomie.models.job).
+
+Start it
+---------
+
+Launch the following command to launch the worker daemon::
+
+    celery worker -A pyramid_celery.celery_app --ini development.ini
+
+Launch the following command to launch the beat daemon::
+
+    celery beat -A pyramid_celery.celery_app --ini development.ini

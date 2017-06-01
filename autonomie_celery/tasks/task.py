@@ -26,75 +26,29 @@ Redis is used as the central bus
 """
 import time
 import transaction
-from sqlalchemy.orm.exc import NoResultFound
 from pyramid.threadlocal import get_current_request
 
 from celery.task import task
 from celery.utils.log import get_task_logger
 
-from autonomie.models.job import (
-    CsvImportJob,
-    MailingJob,
-)
 from autonomie.mail import (
     send_salary_sheet,
     UndeliveredMail,
     MailAlreadySent,
 )
+
 from autonomie.csv_import import (
     get_csv_import_associator,
     get_csv_importer,
 )
+from autonomie_celery.tasks import utils
+from autonomie_celery.models import (
+    CsvImportJob,
+    MailingJob,
+)
 
 
 logger = get_task_logger(__name__)
-
-JOB_RETRIEVE_ERROR = u"We can't retrieve the job {jobid}, the task is cancelled"
-
-
-def record_failure(job_model, job_id, task_id, e):
-    """
-    Record a job's failure
-    """
-    transaction.begin()
-    # We fetch the job again since we're in a new transaction
-    from autonomie.models.base import DBSESSION
-    job = DBSESSION().query(job_model).filter(
-        job_model.id==job_id
-    ).first()
-    job.jobid = task_id
-    job.status = "failed"
-    # We append an error
-    if hasattr(job, 'error_messages'):
-        if job.error_messages is None:
-            job.error_messages = []
-        job.error_messages.append(u"%s" % e)
-    transaction.commit()
-
-
-def get_job(celery_request, job_model, job_id):
-    """
-    Return the current executed job (in autonomie's sens)
-
-    :param obj job_model: The Job model
-    :param obj celery_request: The current celery request object
-    :param int job_id: The id of the job
-
-    :returns: The current job
-    :raises sqlalchemy.orm.exc.NoResultFound: If the job could not be found
-    """
-    from autonomie.models.base import DBSESSION
-    # We sleep a bit to wait for the current request to be finished : since we
-    # use a transaction manager, the delay call launched in a view is done
-    # before the job  element is commited to the bdd (at the end of the request)
-    # if we query for the job too early, the session will not be able to
-    # retrieve the newly created job
-    time.sleep(10)
-    job = DBSESSION().query(job_model).filter(
-        job_model.id==job_id
-    ).one()
-    job.jobid = celery_request.id
-    return job
 
 
 # Here we use the bind argument so that the task will be attached as a bound
@@ -102,7 +56,8 @@ def get_job(celery_request, job_model, job_id):
 @task(bind=True)
 def async_import_datas(
     self, model_type, job_id, association_dict, csv_filepath, id_key, action,
-    force_rel_creation, default_values, delimiter, quotechar):
+    force_rel_creation, default_values, delimiter, quotechar
+):
     """
     Launch the import of the datas provided in the csv_filepath
 
@@ -129,15 +84,12 @@ def async_import_datas(
     logger.info(u"  Action : %s" % action)
     logger.info(u"  Default initialization values : %s" % default_values)
 
-    from autonomie.models.base import DBSESSION
+    from autonomie_base.models.base import DBSESSION
     transaction.begin()
-    try:
-        job = get_job(self.request, CsvImportJob, job_id)
-    except NoResultFound:
-        logger.exception(JOB_RETRIEVE_ERROR.format(job_id))
-        return
 
-    job.jobid = self.request.id
+    job = utils.get_job(self.request, CsvImportJob, job_id)
+    if job is None:
+        return
 
     try:
         associator = get_csv_import_associator(model_type)
@@ -166,7 +118,7 @@ def async_import_datas(
         transaction.abort()
         logger.exception(u"The transaction has been aborted")
         logger.error(u"* Task FAILED !!!")
-        record_failure(CsvImportJob, job_id, self.request.id, e)
+        utils.record_failure(CsvImportJob, job_id, self.request.id, e)
     else:
         transaction.commit()
         logger.info(u"The transaction has been commited")
@@ -187,8 +139,7 @@ def _mail_format_message(mail_message_tmpl, company, kwds):
 
 
 @task(bind=True)
-def async_mail_salarysheets(
-    self, job_id, mails, force):
+def async_mail_salarysheets(self, job_id, mails, force):
     """
     Asynchronously sent a bunch of emails with attached salarysheets
 
@@ -209,15 +160,11 @@ def async_mail_salarysheets(
     logger.info(u"  The job id : %s" % job_id)
 
     request = get_current_request()
-    from autonomie.models.base import DBSESSION
-    # Sleep a bit in case the db was slow
-    time.sleep(10)
+    from autonomie_base.models.base import DBSESSION
 
     # First testing if the job was created
-    try:
-        job = get_job(self.request, MailingJob, job_id)
-    except NoResultFound:
-        logger.exception(JOB_RETRIEVE_ERROR.format(job_id))
+    job = utils.get_job(self.request, MailingJob, job_id)
+    if job is None:
         return
 
     mail_count = 0
@@ -291,7 +238,7 @@ def async_mail_salarysheets(
 
     logger.info(u"-> Task finished")
     transaction.begin()
-    job = get_job(self.request, MailingJob, job_id)
+    job = utils.get_job(self.request, MailingJob, job_id)
     logger.info(u"The job : %s" % job)
     job.jobid = self.request.id
     if error_count == 0:
