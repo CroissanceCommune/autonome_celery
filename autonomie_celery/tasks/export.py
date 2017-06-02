@@ -28,6 +28,7 @@ from celery.utils.log import get_task_logger
 
 from sqla_inspect.ods import SqlaOdsExporter
 from sqla_inspect.excel import SqlaXlsExporter
+from sqla_inspect.csv import SqlaCsvExporter
 from sqlalchemy.orm import (
     RelationshipProperty,
 )
@@ -157,7 +158,6 @@ def _add_userdatas_code_compta(writer, userdatas):
 
     :param obj writer: The tabbed file writer
     :param obj userdatas: The UserDatas instance we manage
-
     """
     user_account = userdatas.user
     if user_account:
@@ -219,6 +219,8 @@ def _write_file_on_disk(tmpdir, model_type, ids, filename, extension):
         writer = SqlaOdsExporter(model=model)
     elif extension == 'xls':
         writer = SqlaXlsExporter(model=model)
+    elif extension == 'csv':
+        writer = SqlaCsvExporter(model=model)
 
     writer = _add_o2m_headers_to_writer(writer, query)
     if model_type == 'userdatas':
