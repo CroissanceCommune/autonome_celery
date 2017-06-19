@@ -28,4 +28,4 @@ def main(global_config, **settings):
     config.include('pyramid_celery')
     config.configure_celery(global_config['__file__'])
     config.commit()
-    return config
+    return config.make_wsgi_app()
