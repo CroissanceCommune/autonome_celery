@@ -9,12 +9,12 @@ with open(os.path.join(here, 'README.txt')) as f:
 requires = [
     'pyramid',
     'pyramid_tm',
-    'pyramid_celery',
+    'pyramid_celery==3.3.0',
     'SQLAlchemy',
     'transaction',
     'zope.sqlalchemy',
-    'redis',
-    'celery',
+    'redis==2.10.5',
+    'celery==4.0.2',
     ]
 
 tests_require = [
