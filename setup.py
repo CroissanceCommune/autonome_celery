@@ -14,7 +14,9 @@ requires = [
     'transaction',
     'zope.sqlalchemy',
     'redis==2.10.5',
+    'kombu==4.0.2',
     'celery==4.0.2',
+    'billiard==3.5.0.2',
     ]
 
 tests_require = [
