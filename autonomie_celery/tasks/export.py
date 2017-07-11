@@ -38,14 +38,10 @@ from sqlalchemy import (
     func,
 )
 
-from autonomie.models.user import UserDatas
-
 from autonomie_celery.models import FileGenerationJob
 from autonomie_celery.tasks import utils
 
-MODELS = {
-    'userdatas': UserDatas,
-}
+MODELS = {}
 
 logger = get_task_logger(__name__)
 
