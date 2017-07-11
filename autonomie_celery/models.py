@@ -22,6 +22,8 @@
 """
 Celery tasks related models
 """
+import os
+import hashlib
 from datetime import datetime
 from pyramid.security import (
     Allow,
@@ -43,6 +45,10 @@ from autonomie_base.models.types import (
 from autonomie_base.models.base import (
     DBBASE,
     default_table_args,
+)
+from sqlalchemy.orm import (
+    relationship,
+    backref,
 )
 
 
@@ -172,3 +178,57 @@ class FileGenerationJob(Job):
         res = Job.todict(self)
         res['filename'] = self.filename
         return res
+
+
+class MailHistory(DBBASE):
+    """
+    Stores the history of mail sent by our application to any company
+    """
+    __tablename__ = 'mail_history'
+    __table_args__ = default_table_args
+    id = Column(Integer, primary_key=True)
+    send_at = Column(
+        DateTime(),
+        default=datetime.now,
+    )
+
+    filepath = Column(String(255))
+    md5sum = Column(String(100))
+    company_id = Column(ForeignKey('company.id'), nullable=True)
+    company = relationship(
+        "Company",
+        backref=backref('mail_history'),
+    )
+
+    @property
+    def filename(self):
+        return os.path.basename(self.filepath)
+
+
+def store_sent_mail(filepath, filedatas, company_id):
+    """
+    Stores a sent email in the history
+
+    :param filename: The path to the sent file
+    :param filedatas: The file datas
+    :param int company_id: the id of a company instance
+    """
+    mail_history = MailHistory(
+        filepath=filepath,
+        md5sum=hashlib.md5(filedatas).hexdigest(),
+        company_id=company_id
+    )
+    return mail_history
+
+
+def check_if_mail_sent(filedatas, company_id):
+    """
+    Check if the given file has already been sent
+    :param str filedatas: The content of a file
+    :param int company_id: The id of a company
+    """
+    query = MailHistory.query()
+    query = query.filter(MailHistory.company_id == company_id)
+    md5sum = hashlib.md5(filedatas).hexdigest()
+    query = query.filter(MailHistory.md5sum == md5sum)
+    return query.first() is not None

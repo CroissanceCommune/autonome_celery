@@ -10,6 +10,34 @@ from sqlalchemy import engine_from_config
 from pyramid_beaker import set_cache_regions_from_settings
 
 from autonomie_base.models.initialize import initialize_sql
+from autonomie_celery.tasks.csv_import import MODELS_CONFIGURATION
+
+
+def register_import_model(config, key, model, label, permission, excludes):
+    """
+    Register a model for import
+
+    :param obj config: The pyramid configuration object
+    :param str key: The key used to identify the model type
+    :param class model: The model to be used
+    :param str label: A label describing the type of datas
+    :param str permission: The permission to associate to this import
+    :param tuple excludes: The field of the model we don't want to handle in the
+    import
+    """
+    MODELS_CONFIGURATION[key] = {
+        'factory': model,
+        'label': label,
+        'permission': permission,
+        'excludes': excludes,
+    }
+
+
+def includeme(config):
+    """
+    Includes some celery specific stuff in the main application
+    """
+    config.add_directive("register_import_model", register_import_model)
 
 
 def main(global_config, **settings):

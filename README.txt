@@ -19,8 +19,8 @@ Results
 No result backend is used, tasks interact directly with Autonomie's database to
 return datas.
 
-Autonomie provides all the models that should be used to store task execution
-related stuff (see autonomie.models.job).
+Autonomie celery provides all the models that should be used to store task
+execution related stuff (see autonomie_celery.models).
 
 Start it
 ---------

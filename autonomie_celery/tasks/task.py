@@ -31,99 +31,19 @@ from pyramid.threadlocal import get_current_request
 from celery.task import task
 from celery.utils.log import get_task_logger
 
-from autonomie.mail import (
-    send_salary_sheet,
+from autonomie_base.exception import (
     UndeliveredMail,
     MailAlreadySent,
 )
+from autonomie_celery.mail import send_salary_sheet
 
-from autonomie.csv_import import (
-    get_csv_import_associator,
-    get_csv_importer,
-)
 from autonomie_celery.tasks import utils
 from autonomie_celery.models import (
-    CsvImportJob,
     MailingJob,
 )
 
 
 logger = get_task_logger(__name__)
-
-
-# Here we use the bind argument so that the task will be attached as a bound
-# method and thus we can access attributes like request
-@task(bind=True)
-def async_import_datas(
-    self, model_type, job_id, association_dict, csv_filepath, id_key, action,
-    force_rel_creation, default_values, delimiter, quotechar
-):
-    """
-    Launch the import of the datas provided in the csv_filepath
-
-    :param str model_type: A handled model_type
-    :param int job_id: The id of the db job object that should handle the return
-        datas
-    :param dict association_dict: describes the association
-        csv_key<->SQLA model attribute
-    :param str csv_filepath: The absolute path to the csv file
-    :param str id_key: The model attribute used to handle updates
-    :param str action: The name of the action we want to run
-        (insert/update/override/only_update/only_override)
-    :param bool force_rel_creation: Force the creation of configurable related
-    elements
-    :param default_values: default_values used to initialize new objects
-    :param delimiter: The delimiter to use for csv parsing
-    :param quotechar: The quotechar to use for csv parsing
-    """
-    logger.info(u"We are launching an asynchronous csv import")
-    logger.info(u"  The job id : %s" % job_id)
-    logger.info(u"  The csv_filepath : %s" % csv_filepath)
-    logger.info(u"  The association dict : %s" % association_dict)
-    logger.info(u"  The id key : %s" % id_key)
-    logger.info(u"  Action : %s" % action)
-    logger.info(u"  Default initialization values : %s" % default_values)
-
-    from autonomie_base.models.base import DBSESSION
-    transaction.begin()
-
-    job = utils.get_job(self.request, CsvImportJob, job_id)
-    if job is None:
-        return
-
-    try:
-        associator = get_csv_import_associator(model_type)
-        associator.set_association_dict(association_dict)
-        csv_buffer = open(csv_filepath, 'r')
-        importer = get_csv_importer(
-            DBSESSION(),
-            model_type,
-            csv_buffer,
-            associator,
-            action=action,
-            id_key=id_key,
-            force_rel_creation=force_rel_creation,
-            default_values=default_values,
-            delimiter=delimiter,
-            quotechar=quotechar,
-        )
-        logger.info(u"Importing the datas")
-        importer.import_datas()
-        logger.info(u"We update the job informations")
-        for key, value in importer.log().items():
-            setattr(job, key, value)
-        job.status = "completed"
-        DBSESSION().merge(job)
-    except Exception as e:
-        transaction.abort()
-        logger.exception(u"The transaction has been aborted")
-        logger.error(u"* Task FAILED !!!")
-        utils.record_failure(CsvImportJob, job_id, self.request.id, e)
-    else:
-        transaction.commit()
-        logger.info(u"The transaction has been commited")
-        logger.info(u"* Task SUCCEEDED !!!")
-    return ""
 
 
 def _mail_format_message(mail_message_tmpl, company, kwds):

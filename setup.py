@@ -31,10 +31,12 @@ entry_points = {
 }
 
 setup(name='autonomie_celery',
-      version='0.1',
+      version='1.0',
       description='autonomie_celery',
       long_description=README,
+      license='GPLv3',
       classifiers=[
+          "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
           "Programming Language :: Python",
           "Framework :: Pyramid",
           "Topic :: Internet :: WWW/HTTP",
@@ -42,7 +44,7 @@ setup(name='autonomie_celery',
       ],
       author='Majerti',
       author_email='equipe@majerti.fr',
-      url='',
+      url='https://github.com/CroissanceCommune/autonomie_base',
       keywords='web wsgi bfg pylons pyramid celery',
       packages=find_packages(),
       include_package_data=True,
