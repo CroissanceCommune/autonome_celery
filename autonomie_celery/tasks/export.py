@@ -41,9 +41,9 @@ from sqlalchemy import (
 from autonomie_celery.models import FileGenerationJob
 from autonomie_celery.tasks import utils
 
-MODELS = {}
+MODELS_CONFIGURATION = {}
 
-logger = get_task_logger(__name__)
+logger = utils.get_logger(__name__)
 
 
 GENERATION_ERROR_MESSAGE = (
@@ -53,7 +53,7 @@ GENERATION_ERROR_MESSAGE = (
 )
 
 
-def _add_o2m_headers_to_writer(writer, query):
+def _add_o2m_headers_to_writer(writer, query, id_key):
     """
     Add column headers in the form "label 1",  "label 2" ... to be able to
     insert the o2m related elements to a main model's table export (allow to
@@ -69,6 +69,10 @@ def _add_o2m_headers_to_writer(writer, query):
 
     The name of the attribute is configured using the "flatten" key in the
     relationship's export configuration
+
+    :param str id_key: The foreign key attribute mostly matching the class we
+    export (e.g : when exporting UserDatas, most of the related elements point
+    to it through a userdatas_id foreign key)
     """
     from autonomie_base.models.base import DBSESSION
     new_headers = []
@@ -78,12 +82,14 @@ def _add_o2m_headers_to_writer(writer, query):
                 class_ = header['__col__'].mapper.class_
                 # On compte le nombre maximum d'objet lié que l'on rencontre
                 # dans la base
-                if not hasattr(class_, 'userdatas_id'):
+                if not hasattr(class_, id_key):
                     continue
+
                 count = DBSESSION().query(
                     label("nb", func.count(class_.id))
-                ).group_by(class_.userdatas_id).order_by(
+                ).group_by(getattr(class_, id_key)).order_by(
                     desc("nb")).first()
+
                 if count is not None:
                     count = count[0]
                 else:
@@ -117,50 +123,6 @@ def _add_o2m_headers_to_writer(writer, query):
                             new_headers.append(new_header)
 
     writer.headers.extend(new_headers)
-    return writer
-
-
-def _add_userdatas_custom_headers(writer, query):
-    """
-    Specific to userdatas exports
-
-    Add custom headers that are not added through automation
-
-    Add headers for code_compta
-    """
-    from autonomie_base.models.base import DBSESSION
-    from autonomie.models.user import COMPANY_EMPLOYEE
-    # Compte analytique
-    query = DBSESSION().query(
-        func.count(COMPANY_EMPLOYEE.c.company_id).label('nb')
-    )
-    query = query.group_by(COMPANY_EMPLOYEE.c.account_id)
-    code_compta_count = query.order_by(desc("nb")).first()
-    if code_compta_count:
-        code_compta_count = code_compta_count[0]
-        for index in range(0, code_compta_count):
-            new_header = {
-                'label': "Compte_analytique {0}".format(index + 1),
-                'name': "code_compta_{0}".format(index + 1),
-            }
-            writer.add_extra_header(new_header)
-
-    return writer
-
-
-def _add_userdatas_code_compta(writer, userdatas):
-    """
-    Add code compta to exports (specific for userdatas exports)
-
-    :param obj writer: The tabbed file writer
-    :param obj userdatas: The UserDatas instance we manage
-    """
-    user_account = userdatas.user
-    if user_account:
-        datas = []
-        for company in user_account.companies:
-            datas.append(company.code_compta)
-        writer.add_extra_datas(datas)
     return writer
 
 
@@ -206,7 +168,8 @@ def _write_file_on_disk(tmpdir, model_type, ids, filename, extension):
     :rtype: str
     """
     logger.debug(" No file was cached yet")
-    model = MODELS[model_type]
+    config = MODELS_CONFIGURATION[model_type]
+    model = config['factory']
     query = model.query()
     if ids:
         query = query.filter(model.id.in_(ids))
@@ -218,14 +181,19 @@ def _write_file_on_disk(tmpdir, model_type, ids, filename, extension):
     elif extension == 'csv':
         writer = SqlaCsvExporter(model=model)
 
-    writer = _add_o2m_headers_to_writer(writer, query)
-    if model_type == 'userdatas':
-        writer = _add_userdatas_custom_headers(writer, query)
+    writer = _add_o2m_headers_to_writer(
+        writer,
+        query,
+        config['foreign_key_name']
+    )
+
+    if 'hook_init' in config:
+        writer = config['hook_init'](writer, query)
 
     for item in query:
         writer.add_row(item)
-        if model_type == 'userdatas':
-            _add_userdatas_code_compta(writer, item)
+        if 'hook_add_row' in config:
+            config['hook_add_row'](writer, item)
 
     filepath = _get_tmp_filepath(tmpdir, filename, extension)
     logger.debug(" + Writing file to %s" % filepath)
@@ -246,9 +214,11 @@ def export_to_file(self, job_id, model_type, ids, filename='test',
     informations
     :param str model_type: The model we want to export (see MODELS)
     :param list ids: List of ids to query
-    :param str filename: The filename to use for the export
+    :param str filename: The base filename to use for the export (unique string
+    is appended)
     :param str file_format: The format in which we want to export
     """
+    logger = get_task_logger(__name__)
     logger.info(u"Exporting to a file")
     logger.info(u" + model_type : %s", model_type)
     logger.info(u" + ids : %s", ids)
