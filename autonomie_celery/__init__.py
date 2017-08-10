@@ -14,7 +14,7 @@ from autonomie_celery.tasks.csv_import import (
     MODELS_CONFIGURATION as IMPORT_MODELS_CONFIGURATION,
 )
 from autonomie_celery.tasks.export import (
-    MODELS as EXPORT_MODELS_CONFIGURATION
+    MODELS_CONFIGURATION as EXPORT_MODELS_CONFIGURATION
 )
 
 
@@ -38,7 +38,7 @@ def register_import_model(config, key, model, label, permission, excludes):
     }
 
 
-def register_export_model(config, key, model):
+def register_export_model(config, key, model, options={}):
     """
     Register a model for export
 
@@ -46,15 +46,14 @@ def register_export_model(config, key, model):
     :param str key: The key used to identify the model type
     :param class model: The model to be used
     """
-    EXPORT_MODELS_CONFIGURATION[key] = model
+    EXPORT_MODELS_CONFIGURATION[key] = {'factory': model}
+    EXPORT_MODELS_CONFIGURATION[key].update(options)
 
 
 def includeme(config):
     """
     Includes some celery specific stuff in the main application
     """
-    config.add_directive("register_import_model", register_import_model)
-    config.add_directive("register_export_model", register_export_model)
 
 
 def main(global_config, **settings):
@@ -71,6 +70,11 @@ def main(global_config, **settings):
     initialize_sql(engine)
     config = Configurator(settings=settings)
     config.include('pyramid_celery')
+    config.add_directive("register_import_model", register_import_model)
+    config.add_directive("register_export_model", register_export_model)
+
+    config.include("autonomie_celery.tasks")
+
     config.configure_celery(global_config['__file__'])
     config.commit()
     return config.make_wsgi_app()
