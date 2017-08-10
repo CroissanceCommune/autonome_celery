@@ -29,7 +29,6 @@ import transaction
 from pyramid.threadlocal import get_current_request
 
 from celery.task import task
-from celery.utils.log import get_task_logger
 
 from autonomie_base.exception import (
     UndeliveredMail,
@@ -43,7 +42,7 @@ from autonomie_celery.models import (
 )
 
 
-logger = get_task_logger(__name__)
+logger = utils.get_logger(__name__)
 
 
 def _mail_format_message(mail_message_tmpl, company, kwds):

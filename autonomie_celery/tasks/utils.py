@@ -12,7 +12,11 @@ from celery.utils.log import get_task_logger
 
 JOB_RETRIEVE_ERROR = u"We can't retrieve the job {jobid}, the task is cancelled"
 
-logger = get_task_logger(__name__)
+
+def get_logger(name=""):
+    return get_task_logger("celery." + name)
+
+logger = get_logger(__name__)
 
 
 def get_job(celery_request, job_model, job_id):

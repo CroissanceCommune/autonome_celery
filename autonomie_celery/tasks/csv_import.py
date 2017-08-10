@@ -31,7 +31,6 @@ Csv based importation module
 association)
 5- insert or update elements
 """
-import logging
 import transaction
 import csv
 
@@ -64,7 +63,7 @@ from autonomie_celery.tasks import utils
 from autonomie_celery.models import (
     CsvImportJob,
 )
-logger = log = logging.getLogger(__name__)
+logger = log = utils.get_logger(__name__)
 
 MISSING_KEY_ERROR = u"Erreur : Le champ {0} ({1}) est requis mais n'a pas été \
 configuré à l'étape 2"
@@ -86,7 +85,8 @@ DELIMITERS = (';', ',', ":")
 QUOTECHARS = ('"', '"')
 
 
-MODELS_CONFIGURATION = {}
+MODELS_CONFIGURATION = {
+}
 
 
 def format_input_value(value, sqla_column_dict, force_rel_creation=False):
