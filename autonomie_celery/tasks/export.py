@@ -174,12 +174,17 @@ def _write_file_on_disk(tmpdir, model_type, ids, filename, extension):
     if ids:
         query = query.filter(model.id.in_(ids))
 
+    options = {}
+    if 'excludes' in config:
+        options['excludes'] = config['excludes']
+    if 'order' in config:
+        options['order'] = config['order']
     if extension == 'ods':
-        writer = SqlaOdsExporter(model=model)
+        writer = SqlaOdsExporter(model=model, **options)
     elif extension == 'xls':
-        writer = SqlaXlsExporter(model=model)
+        writer = SqlaXlsExporter(model=model, **options)
     elif extension == 'csv':
-        writer = SqlaCsvExporter(model=model)
+        writer = SqlaCsvExporter(model=model, **options)
 
     writer = _add_o2m_headers_to_writer(
         writer,

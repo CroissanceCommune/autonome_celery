@@ -9,9 +9,11 @@ from sqlalchemy import (
     func,
 )
 
+from autonomie.utils.strings import format_amount
 from autonomie.models.user import UserDatas
 from autonomie.models.customer import Customer
-from autonomie.models.task.invoice import Invoice
+from autonomie.models.tva import Tva
+from autonomie.models.task import Task
 
 
 def _add_userdatas_custom_headers(writer, query):
@@ -59,10 +61,61 @@ def _add_userdatas_code_compta(writer, userdatas):
 
 
 def _add_invoice_custom_headers(writer, invoices):
+    """
+    Invoice export headers
+
+    * Entreprise ;
+    • Client ;
+    • Date ;
+    • Numéro de factures ;
+    • Objet ;
+    • Lieu des travaux ;
+    • HT (par taux de tva) ;
+    • TVA (par taux de tva) ;
+    • TTC.
+    """
+    for tva in Tva.query():
+        writer.add_extra_header({
+            'label': "HT {tva.name}".format(tva=tva),
+            "name": "HT {tva.value}".format(tva=tva),
+        })
+        writer.add_extra_header({'label': tva.name, "name": tva.value})
+
+    writer.add_extra_header({'label': u"Montat TTC", "name": "ttc"})
     return writer
 
 
-def _add_invoice_datas(writer, invoices):
+def _add_invoice_datas(writer, invoice):
+    ht_values = invoice.tva_ht_parts()
+    tva_values = invoice.get_tvas()
+    datas = []
+    for tva in Tva.query():
+        datas.append(
+            format_amount(
+                ht_values.get(tva.value, 0),
+                precision=5,
+                trim=False,
+                grouping=False,
+            )
+        )
+        datas.append(
+            format_amount(
+                tva_values.get(tva.value, 0),
+                precision=5,
+                trim=False,
+                grouping=False,
+
+            )
+        )
+    datas.append(
+        format_amount(
+            invoice.ttc,
+            precision=5,
+            trim=False,
+            grouping=False
+        )
+    )
+    writer.add_extra_datas(datas)
     return writer
 
 
@@ -107,10 +160,19 @@ def includeme(config):
 
     config.register_export_model(
         key='invoices',
-        model=Invoice,
+        model=Task,
         options={
             'hook_init': _add_invoice_custom_headers,
             'hook_add_row': _add_invoice_datas,
             'foreign_key_name': 'task_id',
+            'excludes': ('name', 'created_at', 'updated_at', 'type_'),
+            'order': (
+                'company',
+                'customer',
+                'date',
+                'official_number',
+                'description',
+                'workplace',
+            )
         }
     )
