@@ -9,7 +9,7 @@ from sqlalchemy import (
     func,
 )
 
-from autonomie_base.utils.renderers import customize_sqla_tools
+from autonomie_base.utils.renderers import configure_export
 from autonomie.utils.strings import format_amount
 from autonomie.models.user import UserDatas
 from autonomie.models.customer import Customer
@@ -121,7 +121,7 @@ def _add_invoice_datas(writer, invoice):
 
 
 def includeme(config):
-    customize_sqla_tools(config)
+    configure_export()
     config.register_import_model(
         key='userdatas',
         model=UserDatas,
