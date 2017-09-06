@@ -54,6 +54,9 @@ def includeme(config):
     """
     Includes some celery specific stuff in the main application
     """
+    config.add_directive("register_import_model", register_import_model)
+    config.add_directive("register_export_model", register_export_model)
+    config.include("autonomie_celery.tasks")
 
 
 def main(global_config, **settings):
@@ -70,10 +73,7 @@ def main(global_config, **settings):
     initialize_sql(engine)
     config = Configurator(settings=settings)
     config.include('pyramid_celery')
-    config.add_directive("register_import_model", register_import_model)
-    config.add_directive("register_export_model", register_export_model)
-
-    config.include("autonomie_celery.tasks")
+    includeme(config)
 
     config.configure_celery(global_config['__file__'])
     config.commit()

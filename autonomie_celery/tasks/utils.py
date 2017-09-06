@@ -86,7 +86,7 @@ def check_alive():
             return_code = False
             return_msg = (
                 u"Le service backend ne répond pas "
-                u"(Celery service not launched)."
+                u"(Celery service not available)."
             )
     except ConnectionError as e:
         return_code = False
