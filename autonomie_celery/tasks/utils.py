@@ -85,11 +85,14 @@ def check_alive():
         if not stats:
             return_code = False
             return_msg = (
-                u"Le service backend ne peut répondre, veuillez ré-itérer "
-                u"votre requête dans quelques instants"
+                u"Le service backend ne répond pas "
+                u"(Celery service not launched)."
             )
     except ConnectionError as e:
         return_code = False
         return_msg = u"Erreur de connextion au service backend (%s)." % e
+
+    if return_code is False:
+        return_msg += u" Veuillez contacter un administrateur"
 
     return return_code, return_msg
