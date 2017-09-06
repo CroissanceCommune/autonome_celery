@@ -66,3 +66,30 @@ def record_failure(job_model, job_id, task_id, e):
             job.error_messages = []
         job.error_messages.append(u"%s" % e)
     transaction.commit()
+
+
+def check_alive():
+    """
+    Check the redis service is available
+    """
+    from pyramid_celery import celery_app
+    from redis.exceptions import ConnectionError
+
+    return_code = True
+    return_msg = None
+    try:
+        from celery.app.control import Inspect
+        insp = Inspect(app=celery_app)
+
+        stats = insp.stats()
+        if not stats:
+            return_code = False
+            return_msg = (
+                u"Le service backend ne peut répondre, veuillez ré-itérer "
+                u"votre requête dans quelques instants"
+            )
+    except ConnectionError as e:
+        return_code = False
+        return_msg = u"Erreur de connextion au service backend (%s)." % e
+
+    return return_code, return_msg
