@@ -31,7 +31,7 @@ entry_points = {
 }
 
 setup(name='autonomie_celery',
-      version='1.1',
+      version='1.1.1',
       description='autonomie_celery',
       long_description=README,
       license='GPLv3',
