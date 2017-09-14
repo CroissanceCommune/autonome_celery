@@ -138,7 +138,7 @@ def includeme(config):
         )
     )
     config.register_import_model(
-        key='customer',
+        key='customers',
         model=Customer,
         label=u"Clients",
         permission='add_customer',
