@@ -37,7 +37,7 @@ import csv
 from cStringIO import StringIO
 from collections import OrderedDict
 
-from celery.task import task
+from pyramid_celery import celery_app
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -725,7 +725,7 @@ def get_csv_import_associator(key):
 
 # Here we use the bind argument so that the task will be attached as a bound
 # method and thus we can access attributes like request
-@task(bind=True)
+@celery_app.task(bind=True)
 def async_import_datas(
     self, model_type, job_id, association_dict, csv_filepath, id_key, action,
     force_rel_creation, default_values, delimiter, quotechar

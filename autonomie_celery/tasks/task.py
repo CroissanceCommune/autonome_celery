@@ -28,7 +28,7 @@ import time
 import transaction
 from pyramid.threadlocal import get_current_request
 
-from celery.task import task
+from pyramid_celery import celery_app
 
 from autonomie_base.exception import (
     UndeliveredMail,
@@ -57,7 +57,7 @@ def _mail_format_message(mail_message_tmpl, company, kwds):
     return message
 
 
-@task(bind=True)
+@celery_app.task(bind=True)
 def async_mail_salarysheets(self, job_id, mails, force):
     """
     Asynchronously sent a bunch of emails with attached salarysheets
