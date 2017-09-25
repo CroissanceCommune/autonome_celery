@@ -40,13 +40,15 @@ from autonomie_celery.tasks import utils
 logger = utils.get_logger(__name__)
 
 
+def _get_registry():
+    return celery_app.conf['PYRAMID_REGISTRY']
+
+
 def _get_base_path():
     """
     Retreive the base working path as configured in the ini file
     """
-    return celery_app.conf['PYRAMID_REGISTRY'].settings[
-        'autonomie.parsing_pool'
-    ]
+    return _get_registry().settings['autonomie.parsing_pool']
 
 
 def _get_path(directory):
@@ -173,7 +175,11 @@ class Parser(object):
         """
         query = DBSESSION().query(Company.id)
         query = query.filter_by(code_compta=analytical_account)
-        return query.first()
+        logger.debug(query)
+        result = query.first()
+        if result is not None:
+            result = result[0]
+        return result
 
     def _build_operation(self, line_datas):
         """
@@ -225,11 +231,16 @@ class Parser(object):
             date=file_datas['date'],
             md5sum=file_datas['md5sum'],
         )
+        missed_associations = 0
+
         for line in lines:
             operation = self._build_operation(line)
             if operation is not None:
                 upload_object.operations.append(operation)
-        return upload_object
+                if operation.company_id is None:
+                    missed_associations += 1
+
+        return upload_object, missed_associations
 
     def _already_loaded(self, file_datas):
         query = DBSESSION().query(AccountingOperationUpload)
@@ -260,15 +271,21 @@ class Parser(object):
         file_datas = self._get_datas_from_file_path()
         if self.force or not self._already_loaded(file_datas):
             old_ids = self._get_existing_operation_ids()
-            upload_object = self._fill_db(file_datas)
-            if upload_object.operations:
-                self._clean_old_operations(old_ids)
+            upload_object, missed_associations = self._fill_db(file_datas)
             logger.info(
                 u"Storing {0} new operations in database".format(
                     len(upload_object.operations)
                 )
             )
+            logger.info(
+                "  + {0} operations were not associated to an existing "
+                "company".format(missed_associations)
+            )
             DBSESSION().add(upload_object)
+            DBSESSION().flush()
+            if upload_object.operations and old_ids:
+                self._clean_old_operations(old_ids)
+            return len(upload_object.operations), missed_associations
         else:
             logger.error(u"File {0} already loaded".format(self.file_path))
             _mv_file(self.file_path)
@@ -276,6 +293,8 @@ class Parser(object):
                 u"Ce fichier a déjà été traité : {0}".format(self.file_path)
             )
 
+MAIL_ERROR_SUBJECT = u"[ERREUR] Autonomie : traitement de votre document \
+{filename}"
 
 MAIL_ERROR_BODY = u"""Une erreur est survenue lors du traitement du
 fichier {filename}:
@@ -289,8 +308,14 @@ traitement du fichier {filename}:
 
 Veuillez contacter votre administrateur
 """
-MAIL_ERROR_SUBJECT = u"""[ERREUR] Autonomie : traitement de votre document
-{filename}"""
+MAIL_SUCCESS_SUBJECT = u"""Autonomie : traitement de votre document {0}"""
+MAIL_SUCCESS_BODY = u"""Le fichier {0} a été traité avec succès.
+Écritures générées : {1}
+Écritures n'ayant pas pu être associées à une entreprise existante dans
+Autonomie : {2}
+
+Les indicateurs ont été générés depuis ces écritures.
+"""
 
 
 def send_error(request, mail_address, filename, err):
@@ -321,6 +346,21 @@ def send_unknown_error(request, mail_address, filename, err):
     )
 
 
+def send_success(request, mail_address, filename, new_entries, missing):
+    subject = MAIL_SUCCESS_SUBJECT.format(filename)
+    message = MAIL_SUCCESS_BODY.format(
+        filename,
+        new_entries,
+        missing,
+    )
+    send_mail(
+        request,
+        mail_address,
+        message,
+        subject,
+    )
+
+
 @celery_app.task(bind=True)
 def handle_pool_task(self):
     """
@@ -333,21 +373,22 @@ def handle_pool_task(self):
     else:
         logger.debug("Parsing a new file")
         mail_address = get_admin_mail()
+        if mail_address:
+            setattr(self.request, "registry", _get_registry())
+            filename = os.path.basename(file_to_parse)
         parser = Parser(file_to_parse)
         transaction.begin()
         try:
-            parser.process_file()
+            num_operations, missed_associations = parser.process_file()
         except KnownError as err:
             transaction.abort()
             logger.exception(u"KnownError : %s" % err.message)
-            filename = os.path.basename(file_to_parse)
             if mail_address:
                 send_error(self.request, mail_address, filename, err)
             _mv_file(file_to_parse, 'error')
         except Exception as err:
             transaction.abort()
             logger.exception(u"Unkown Error")
-            filename = os.path.basename(file_to_parse)
             if mail_address:
                 send_unknown_error(self.request, mail_address, filename, err)
             _mv_file(file_to_parse, 'error')
@@ -355,4 +396,12 @@ def handle_pool_task(self):
             transaction.commit()
             logger.info(u"The transaction has been commited")
             logger.info(u"* Task SUCCEEDED !!!")
+            if mail_address:
+                send_success(
+                    self.request,
+                    mail_address,
+                    filename,
+                    num_operations,
+                    missed_associations,
+                )
             _mv_file(file_to_parse)
