@@ -175,7 +175,6 @@ class Parser(object):
         """
         query = DBSESSION().query(Company.id)
         query = query.filter_by(code_compta=analytical_account)
-        logger.debug(query)
         result = query.first()
         if result is not None:
             result = result[0]
