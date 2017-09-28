@@ -51,6 +51,11 @@ CELERY_TASK_SERIALIZER = json
 CELERY_ACCEPT_CONTENT= json
                        yaml
 
+[celerybeat:accounting_parser]
+task = autonomie_celery.tasks.accounting_parser.handle_pool_task
+type = timedelta
+schedule = {"seconds": 600}
+
 [server:main]
 use = egg:waitress#main
 host = 0.0.0.0
