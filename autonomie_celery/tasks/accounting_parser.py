@@ -35,6 +35,9 @@ from autonomie.models.accounting.operations import (
     AccountingOperation,
 )
 from autonomie_celery.tasks import utils
+from autonomie_celery.tasks.accounting_measure_compute import (
+    compile_measures,
+)
 
 
 logger = utils.get_logger(__name__)
@@ -284,6 +287,12 @@ class Parser(object):
             DBSESSION().flush()
             if upload_object.operations and old_ids:
                 self._clean_old_operations(old_ids)
+
+            try:
+                compile_measures(upload_object, upload_object.operations)
+            except:
+                logger.exception(u"Error while compiling measures")
+
             return len(upload_object.operations), missed_associations
         else:
             logger.error(u"File {0} already loaded".format(self.file_path))

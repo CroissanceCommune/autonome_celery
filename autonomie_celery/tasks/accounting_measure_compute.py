@@ -10,6 +10,10 @@ import transaction
 
 from pyramid_celery import celery_app
 from autonomie_base.models.base import DBSESSION
+from autonomie.models.accounting.operations import (
+    AccountingOperationUpload,
+    AccountingOperation,
+)
 from autonomie.models.accounting.measures import (
     TreasuryMeasure,
     TreasuryMeasureGrid,
@@ -54,7 +58,7 @@ def get_new_grid(upload, company_id):
     return TreasuryMeasureGrid(
         date=upload.date,
         company_id=company_id,
-        upload_id=upload.id,
+        upload=upload,
     )
 
 
@@ -184,3 +188,27 @@ def compile_measures(upload, operations):
         if matched:
             session.merge(measure)
     return grids
+
+
+@celery_app.task(bind=True)
+def compile_measures_task(self, upload_id, operation_ids):
+    """
+    Celery task handling measures compilation
+    """
+    logger.info(
+        u"Launching the compile measure task for upload {0}".format(upload_id)
+    )
+    transaction.begin()
+    upload = AccountingOperationUpload.get(upload_id)
+    operations = AccountingOperation.query().filter_by(
+        upload_id=upload_id
+    ).all()
+    try:
+        grids = compile_measures(upload, operations)
+    except:
+        transaction.abort()
+    else:
+        transaction.commit()
+        logger.info(u"{0} measure grids were handled".format(len(grids)))
+        logger.info(u"The transaction has been commited")
+        logger.info(u"* Task SUCCEEDED !!!")
