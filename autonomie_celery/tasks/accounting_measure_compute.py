@@ -27,7 +27,7 @@ logger = utils.get_logger(__name__)
 
 
 # Valeur définie dans autonomie.models.populate (issue du cahier des charges)
-SPECIAL_MEASURE_TYPE_INTERNAL_ID = 8
+SPECIAL_MEASURE_TYPE_INTERNAL_ID = 9
 
 
 def collect_main_measure_types():
