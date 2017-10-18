@@ -77,8 +77,8 @@ def _add_invoice_custom_headers(writer, invoices):
     """
     for tva in Tva.query():
         writer.add_extra_header({
-            'label': "HT {tva.name}".format(tva=tva),
-            "name": "HT {tva.value}".format(tva=tva),
+            'label': u"HT {tva.name}".format(tva=tva),
+            "name": u"HT {tva.value}".format(tva=tva),
         })
         writer.add_extra_header({'label': tva.name, "name": tva.value})
 
