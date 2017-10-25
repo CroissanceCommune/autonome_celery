@@ -43,7 +43,7 @@ def get_job(celery_request, job_model, job_id):
         job.jobid = celery_request.id
     except NoResultFound:
         logger.debug(" -- No job found")
-        logger.exception(JOB_RETRIEVE_ERROR.format(job_id))
+        logger.exception(JOB_RETRIEVE_ERROR.format(jobid=job_id))
         job = None
     return job
 
