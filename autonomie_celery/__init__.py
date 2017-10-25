@@ -9,6 +9,7 @@ from pyramid.paster import setup_logging
 from sqlalchemy import engine_from_config
 from pyramid_beaker import set_cache_regions_from_settings
 
+from autonomie.models import *
 from autonomie_base.models.initialize import initialize_sql
 from autonomie_celery.tasks.csv_import import (
     MODELS_CONFIGURATION as IMPORT_MODELS_CONFIGURATION,
@@ -63,7 +64,6 @@ def main(global_config, **settings):
     """
     Entry point for the pyramid celery stuff
     """
-    print("In the main function")
     logging.basicConfig()
     setup_logging(global_config['__file__'])
     logger = logging.getLogger(__name__)
