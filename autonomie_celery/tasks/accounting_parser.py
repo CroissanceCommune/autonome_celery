@@ -51,7 +51,7 @@ def _get_base_path():
     """
     Retreive the base working path as configured in the ini file
     """
-    return _get_registry().settings['autonomie.parsing_pool']
+    return _get_registry().settings['autonomie.parsing_pool_parent']
 
 
 def _get_path(directory):
