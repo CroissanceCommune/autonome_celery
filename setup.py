@@ -27,7 +27,8 @@ tests_require = [
 
 
 entry_points = {
-    "paste.app_factory": "main = autonomie_celery:main",
+    "paste.app_factory": "worker = autonomie_celery:worker",
+    "paste.app_factory": "scheduler = autonomie_celery:scheduler",
 }
 
 setup(name='autonomie_celery',

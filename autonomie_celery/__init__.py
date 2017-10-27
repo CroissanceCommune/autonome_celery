@@ -78,3 +78,15 @@ def main(global_config, **settings):
     config.configure_celery(global_config['__file__'])
     config.commit()
     return config.make_wsgi_app()
+
+
+def scheduler(global_config, **settings):
+    logging.basicConfig()
+    setup_logging(global_config['__file__'])
+    logger = logging.getLogger(__name__)
+    logger.info("Bootstraping celery scheduler application")
+    config = Configurator(settings=settings)
+    config.include('pyramid_celery')
+    config.configure_celery(global_config['__file__'])
+    config.commit()
+    return config.make_wsgi_app()
