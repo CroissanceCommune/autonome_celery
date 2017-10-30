@@ -60,7 +60,7 @@ def includeme(config):
     config.include("autonomie_celery.tasks")
 
 
-def main(global_config, **settings):
+def worker(global_config, **settings):
     """
     Entry point for the pyramid celery stuff
     """
