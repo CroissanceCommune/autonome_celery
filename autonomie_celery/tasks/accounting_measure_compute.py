@@ -26,26 +26,12 @@ from autonomie_celery.tasks import utils
 logger = utils.get_logger(__name__)
 
 
-# Valeur définie dans autonomie.models.populate (issue du cahier des charges)
-SPECIAL_MEASURE_TYPE_INTERNAL_ID = 9
-
 
 def collect_main_measure_types():
     """
     Collect the configured TreasuryMeasureType
     """
-    return TreasuryMeasureType.query().filter(
-        TreasuryMeasureType.internal_id != SPECIAL_MEASURE_TYPE_INTERNAL_ID
-    )
-
-
-def get_special_measure_type():
-    """
-    Collect the measure type grouping all the 'others' operations
-    """
-    return TreasuryMeasureType.query().filter(
-        TreasuryMeasureType.internal_id == SPECIAL_MEASURE_TYPE_INTERNAL_ID
-    ).first()
+    return TreasuryMeasureType.query()
 
 
 def get_new_grid(upload, company_id):
@@ -87,31 +73,18 @@ def get_new_measure(label, grid_id, measure_type_id=None):
     return measure
 
 
-def get_existing_measures(grids, special_measure_type):
+def get_existing_measures(grids):
     """
     Build the measures dict based on the given existing grids
     Also reset all values to 0
     """
     result = {}
     for grid in grids.values():
-        company_measures = result[grid.company_id] = {
-            special_measure_type.id: {}
-        }
+        company_measures = result[grid.company_id] = {}
         for measure in grid.measures:
-            if measure.measure_type_id != special_measure_type.id:
-                measure.value = 0
-                company_measures[measure.measure_type_id] = measure
-            else:
-                remove_old_measure(measure)
+            measure.value = 0
+            company_measures[measure.measure_type_id] = measure
     return result
-
-
-def remove_old_measure(measure):
-    """
-    Remove special measures that comes from an older computation
-    """
-    session = DBSESSION()
-    session.delete(measure)
 
 
 def compile_measures(upload, operations):
@@ -123,14 +96,13 @@ def compile_measures(upload, operations):
     """
     session = DBSESSION()
     measure_types = collect_main_measure_types()
-    special_measure_type = get_special_measure_type()
 
     # Stores grids : {'company1_id': <TreasuryMeasureGrid>}
     grids = get_existing_grids(upload)
 
     # Stores built measures {'company1_id': {'measure1_id': object,
     # 'measure2_id': instance}, ...}
-    measures = get_existing_measures(grids, special_measure_type)
+    measures = get_existing_measures(grids)
 
     for operation in operations:
         if operation.company_id is None:
@@ -147,9 +119,7 @@ def compile_measures(upload, operations):
 
         company_measures = measures.get(operation.company_id)
         if company_measures is None:
-            company_measures = measures[operation.company_id] = {
-                special_measure_type.id: {}
-            }
+            company_measures = measures[operation.company_id] = {}
 
         matched = False
         for measure_type in measure_types:
@@ -166,25 +136,6 @@ def compile_measures(upload, operations):
                 measure.value += operation.total()
                 matched = True
 
-        if not matched:
-            if special_measure_type.match(operation.general_account):
-                measure = company_measures[special_measure_type.id].get(
-                    operation.general_account
-                )
-                if measure is None:
-                    measure = get_new_measure(
-                        operation.label,
-                        grid.id,
-                        special_measure_type.id
-                    )
-                    company_measures[
-                        special_measure_type.id
-                    ][
-                        operation.general_account
-                    ] = measure
-
-                measure.value += operation.total()
-                matched = True
         if matched:
             session.merge(measure)
     return grids
