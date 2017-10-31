@@ -1,0 +1,6 @@
+celery==4.0.2
+pyramid-celery==3.0.0
+billiard==3.5.0.2
+kombu==4.0.2
+redis==2.10.5
+sylk_parser==0.2
