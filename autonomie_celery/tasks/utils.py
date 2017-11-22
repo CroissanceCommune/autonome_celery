@@ -41,11 +41,26 @@ def get_job(celery_request, job_model, job_id):
     try:
         job = DBSESSION().query(job_model).filter(job_model.id == job_id).one()
         job.jobid = celery_request.id
+        if job.status != 'planned':
+            logger.error(u"Job has already been marked as failed")
+            job = None
     except NoResultFound:
         logger.debug(" -- No job found")
         logger.exception(JOB_RETRIEVE_ERROR.format(jobid=job_id))
         job = None
+
     return job
+
+
+def record_running(job):
+    """
+    Record that a job is running
+    """
+    transaction.begin()
+    job.status = "running"
+    from autonomie_base.models.base import DBSESSION
+    DBSESSION().merge(job)
+    transaction.commit()
 
 
 def record_failure(job_model, job_id, task_id, e):

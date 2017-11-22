@@ -24,7 +24,10 @@ Celery tasks related models
 """
 import os
 import hashlib
-from datetime import datetime
+from datetime import (
+    datetime,
+    timedelta,
+)
 from pyramid.security import (
     Allow,
 )
@@ -50,6 +53,9 @@ from sqlalchemy.orm import (
     relationship,
     backref,
 )
+
+
+TIMEOUT = timedelta(seconds=10000)
 
 
 class Job(DBBASE, PersistentACLMixin):
@@ -111,6 +117,23 @@ class Job(DBBASE, PersistentACLMixin):
         Set the job owner's acls
         """
         self._acl = [(Allow, login, ('add', 'edit', 'view',))]
+
+    def timeout(self):
+        """
+        Check if this element should be timeouted
+        """
+        result = True
+        if datetime.now() - self.updated_at > TIMEOUT:
+            self.status = u"failed"
+            if hasattr(self, 'error_messages'):
+                self.error_messages = [
+                    u"Cette tâche a été automatiquement annulée car elle "
+                    u"n'a pas pu être traitée. Veulliez contacter un "
+                    u"administrateur en lui fournissant l'identifiant de "
+                    u"tâche suivant : {0}".format(self.id)
+                ]
+            result = False
+        return result
 
 
 class CsvImportJob(Job):
@@ -177,6 +200,7 @@ class FileGenerationJob(Job):
     def todict(self):
         res = Job.todict(self)
         res['filename'] = self.filename
+        res['error_messages'] = self.error_messages
         return res
 
 
