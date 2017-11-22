@@ -757,13 +757,15 @@ def async_import_datas(
     logger.info(u"  Default initialization values : %s" % default_values)
 
     from autonomie_base.models.base import DBSESSION
-    transaction.begin()
 
     job = utils.get_job(self.request, CsvImportJob, job_id)
     if job is None:
         return
 
+    utils.record_running(job)
+
     try:
+        transaction.begin()
         associator = get_csv_import_associator(model_type)
         associator.set_association_dict(association_dict)
         csv_buffer = open(csv_filepath, 'r')

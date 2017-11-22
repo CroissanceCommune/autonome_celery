@@ -233,6 +233,9 @@ def export_to_file(self, job_id, model_type, ids, filename='test',
     if job is None:
         return
 
+    utils.record_running(job)
+
+    transaction.begin()
     tmpdir = _get_tmp_directory_path()
 
     try:

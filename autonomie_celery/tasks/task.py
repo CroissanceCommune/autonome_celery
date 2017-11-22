@@ -86,6 +86,8 @@ def async_mail_salarysheets(self, job_id, mails, force):
     if job is None:
         return
 
+    utils.record_running(job)
+
     mail_count = 0
     error_count = 0
     error_messages = []
