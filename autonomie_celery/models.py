@@ -123,16 +123,17 @@ class Job(DBBASE, PersistentACLMixin):
         Check if this element should be timeouted
         """
         result = True
-        if datetime.now() - self.updated_at > TIMEOUT:
-            self.status = u"failed"
-            if hasattr(self, 'error_messages'):
-                self.error_messages = [
-                    u"Cette tâche a été automatiquement annulée car elle "
-                    u"n'a pas pu être traitée. Veulliez contacter un "
-                    u"administrateur en lui fournissant l'identifiant de "
-                    u"tâche suivant : {0}".format(self.id)
-                ]
-            result = False
+        if self.status in ('planned', 'running'):
+            if datetime.now() - self.updated_at > TIMEOUT:
+                self.status = u"failed"
+                if hasattr(self, 'error_messages'):
+                    self.error_messages = [
+                        u"Cette tâche a été automatiquement annulée car elle "
+                        u"n'a pas pu être traitée. Veulliez contacter un "
+                        u"administrateur en lui fournissant l'identifiant de "
+                        u"tâche suivant : {0}".format(self.id)
+                    ]
+                result = False
         return result
 
 
