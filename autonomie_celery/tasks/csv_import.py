@@ -122,20 +122,24 @@ def format_input_value(value, sqla_column_dict, force_rel_creation=False):
         # Handle the relationship
         # Get the id of the corresponding model and return it
         if sqla_column_dict['rel_type'] == 'manytoone':
-            related_key = sqla_column_dict['related_key']
-            class_ = prop.mapper.class_
-            # We query the database to get the corresponding element filtering
-            # on the configured related_key
-            res = class_.query().filter(
-                getattr(class_, related_key) == value
-            ).first()
-            if res is None and force_rel_creation:
-                if value is not None and value.strip():
-                    logger.debug("Creating a new element : %s %s" % (
-                        related_key, value)
-                    )
-                    creation_dict = {related_key: value}
-                    res = class_(**creation_dict)
+            if 'related_retriever' in sqla_column_dict:
+                func = sqla_column_dict['related_retriever']
+                res = func(value, force_rel_creation)
+            else:
+                related_key = sqla_column_dict['related_key']
+                class_ = prop.mapper.class_
+                # We query the database to get the corresponding element
+                # filtering on the configured related_key
+                res = class_.query().filter(
+                    getattr(class_, related_key) == value
+                ).first()
+                if res is None and force_rel_creation:
+                    if value is not None and value.strip():
+                        logger.debug("Creating a new element : %s %s" % (
+                            related_key, value)
+                        )
+                        creation_dict = {related_key: value}
+                        res = class_(**creation_dict)
         else:
             # We have a one to many relationship, we generate an instance using
             # the related_key as instanciation attribute
@@ -515,7 +519,8 @@ class CsvImporter(object):
         boolean saying if it's an update
         """
         logger.debug(u"Launching update")
-        logger.debug(u"Args : %s" % args)
+        logger.debug(u"Args :")
+        logger.debug(args)
         logger.debug(u"Insert ? : %s" % insert)
         identification_value = args.pop(self.id_key, None)
         updated = False
