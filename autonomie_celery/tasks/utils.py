@@ -103,7 +103,7 @@ def check_alive():
                 u"Le service backend ne répond pas "
                 u"(Celery service not available)."
             )
-    except ConnectionError as e:
+    except (Exception, ConnectionError) as e:
         return_code = False
         return_msg = u"Erreur de connextion au service backend (%s)." % e
 
