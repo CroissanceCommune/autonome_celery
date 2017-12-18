@@ -19,6 +19,13 @@ def get_logger(name=""):
 logger = get_logger(__name__)
 
 
+# we wait max TIMEOUT seconds before considering there was an error while
+# inserting job in the database on main process side
+TIMEOUT = 20
+# Interval of "try again"
+INTERVAL = 2
+
+
 def get_job(celery_request, job_model, job_id):
     """
     Return the current executed job (in autonomie's sens)
@@ -37,17 +44,24 @@ def get_job(celery_request, job_model, job_id):
     # before the job  element is commited to the bdd (at the end of the request)
     # if we query for the job too early, the session will not be able to
     # retrieve the newly created job
-    time.sleep(2)
-    try:
-        job = DBSESSION().query(job_model).filter(job_model.id == job_id).one()
-        job.jobid = celery_request.id
-        if job.status != 'planned':
-            logger.error(u"Job has already been marked as failed")
-            job = None
-    except NoResultFound:
-        logger.debug(" -- No job found")
-        logger.exception(JOB_RETRIEVE_ERROR.format(jobid=job_id))
-        job = None
+    current_time = 0
+    job = None
+    while current_time <= TIMEOUT and job is None:
+        try:
+            job = DBSESSION().query(job_model).filter(
+                job_model.id == job_id
+            ).one()
+            job.jobid = celery_request.id
+            if job.status != 'planned':
+                logger.error(u"Job has already been launched")
+                job = None
+        except NoResultFound:
+            logger.debug(" -- No job found")
+            logger.exception(JOB_RETRIEVE_ERROR.format(jobid=job_id))
+
+        if job is None:
+            time.sleep(INTERVAL)
+            current_time += INTERVAL
 
     return job
 
