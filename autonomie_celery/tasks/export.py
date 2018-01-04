@@ -205,7 +205,6 @@ def _write_file_on_disk(tmpdir, model_type, ids, filename, extension):
 
     with open(filepath, 'w') as f_buf:
         writer.render(f_buf)
-
     return os.path.basename(filepath)
 
 
@@ -228,17 +227,12 @@ def export_to_file(self, job_id, model_type, ids, filename='test',
     logger.info(u" + model_type : %s", model_type)
     logger.info(u" + ids : %s", ids)
 
-    from autonomie_base.models.base import DBSESSION
-    job = utils.get_job(self.request, FileGenerationJob, job_id)
-    if job is None:
-        return
+    # Mark job started
+    utils.start_job(self.request, FileGenerationJob, job_id)
 
-    utils.record_running(job)
-
-    transaction.begin()
-    tmpdir = _get_tmp_directory_path()
-
+    # Execute actions
     try:
+        tmpdir = _get_tmp_directory_path()
         result_filename = _write_file_on_disk(
             tmpdir,
             model_type,
@@ -247,18 +241,17 @@ def export_to_file(self, job_id, model_type, ids, filename='test',
             file_format,
         )
         logger.debug(u" -> The file %s been written", result_filename)
-        job.status = 'completed'
-        job.filename = result_filename
-        DBSESSION().merge(job)
     except:
-        logger.exception("Error while generating ods file")
+        transaction.abort()
+        logger.exception("Error while generating file")
         errors = [GENERATION_ERROR_MESSAGE % job_id]
         utils.record_failure(
-            FileGenerationJob, job_id, self.request.id,  errors
+            FileGenerationJob, job_id, errors
         )
     else:
         transaction.commit()
-        logger.info(u"The transaction has been commited")
-        logger.info(u"* Task SUCCEEDED !!!")
+        utils.record_completed(
+            FileGenerationJob, job_id, filename=result_filename
+        )
 
     return ""

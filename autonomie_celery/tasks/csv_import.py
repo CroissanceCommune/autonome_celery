@@ -761,16 +761,10 @@ def async_import_datas(
     logger.info(u"  Action : %s" % action)
     logger.info(u"  Default initialization values : %s" % default_values)
 
+    utils.start_job(self.request, CsvImportJob, job_id)
+
     from autonomie_base.models.base import DBSESSION
-
-    job = utils.get_job(self.request, CsvImportJob, job_id)
-    if job is None:
-        return
-
-    utils.record_running(job)
-
     try:
-        transaction.begin()
         associator = get_csv_import_associator(model_type)
         associator.set_association_dict(association_dict)
         csv_buffer = open(csv_filepath, 'r')
@@ -788,18 +782,12 @@ def async_import_datas(
         )
         logger.info(u"Importing the datas")
         importer.import_datas()
-        logger.info(u"We update the job informations")
-        for key, value in importer.log().items():
-            setattr(job, key, value)
-        job.status = "completed"
-        DBSESSION().merge(job)
     except Exception as e:
         transaction.abort()
         logger.exception(u"The transaction has been aborted")
-        logger.error(u"* Task FAILED !!!")
-        utils.record_failure(CsvImportJob, job_id, self.request.id, e)
+        utils.record_failure(CsvImportJob, job_id, e)
     else:
         transaction.commit()
-        logger.info(u"The transaction has been commited")
-        logger.info(u"* Task SUCCEEDED !!!")
+        logger.info(u"We update the job informations")
+        utils.record_completed(CsvImportJob, job_id, **importer.log())
     return ""

@@ -78,25 +78,21 @@ def async_mail_salarysheets(self, job_id, mails, force):
     logger.info(u"We are launching an asynchronous mail sending operation")
     logger.info(u"  The job id : %s" % job_id)
 
-    request = get_current_request()
     from autonomie_base.models.base import DBSESSION
-
-    # First testing if the job was created
-    job = utils.get_job(self.request, MailingJob, job_id)
-    if job is None:
-        return
-
-    utils.record_running(job)
+    # Mark job started
+    utils.start_job(self.request, MailingJob, job_id)
 
     mail_count = 0
     error_count = 0
     error_messages = []
+    request = get_current_request()
+    session = DBSESSION()
     for mail_datas in mails:
+        transaction.begin()
         # since we send a mail out of the transaction process, we need to commit
         # each mail_history instance to avoid sending and not storing the
         # history
         try:
-            transaction.begin()
             company_id = mail_datas['company_id']
             email = mail_datas['email']
 
@@ -122,9 +118,10 @@ def async_mail_salarysheets(self, job_id, mails, force):
                     subject=subject,
                 )
                 # Stores the history of this sent email
-                DBSESSION().add(mail_history)
+                session.add(mail_history)
 
         except MailAlreadySent as e:
+            transaction.abort()
             error_count += 1
             msg = u"Ce fichier a déjà été envoyé {0}".format(
                 mail_datas['attachment']
@@ -135,6 +132,7 @@ def async_mail_salarysheets(self, job_id, mails, force):
             continue
 
         except UndeliveredMail as e:
+            transaction.abort()
             error_count += 1
             msg = u"Impossible de délivrer de mail à l'entreprise {0} \
 (mail : {1})".format(company_id, email)
@@ -144,33 +142,34 @@ def async_mail_salarysheets(self, job_id, mails, force):
             continue
 
         except Exception as e:
-            error_count += 1
             transaction.abort()
-            logger.exception(u"The transaction has been aborted")
+            error_count += 1
+            logger.exception(u"The subtransaction has been aborted")
             logger.error(u"* Part of the task FAILED !!!")
             error_messages.append(u"{0}".format(e))
 
         else:
-            mail_count += 1
             transaction.commit()
+            mail_count += 1
             logger.info(u"The transaction has been commited")
             logger.info(u"* Part of the Task SUCCEEDED !!!")
-            time.sleep(1)
 
-    logger.info(u"-> Task finished")
-    transaction.begin()
-    job = utils.get_job(self.request, MailingJob, job_id)
-    logger.info(u"The job : %s" % job)
-    job.jobid = self.request.id
-    if error_count == 0:
-        job.status = "completed"
-    else:
-        job.status = "failed"
-    job.messages = [u"{0} mails ont été envoyés".format(mail_count)]
-    job.messages.append(
+    messages = [u"{0} mails ont été envoyés".format(mail_count)]
+    messages.append(
         u"{0} mails n'ont pas pu être envoyés".format(error_count)
     )
-    job.error_messages = error_messages
-    DBSESSION().merge(job)
-    logger.info(u"Committing the transaction")
-    transaction.commit()
+
+    logger.info(u"-> Task finished")
+    if error_count > 0:
+        utils.record_failure(
+            MailingJob,
+            job_id,
+            error_messages=error_messages,
+            messages=messages,
+        )
+    else:
+        utils.record_completed(
+            MailingJob,
+            job_id,
+            messages=messages,
+        )
