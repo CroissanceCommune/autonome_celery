@@ -26,123 +26,133 @@ from autonomie_celery.tasks import utils
 logger = utils.get_logger(__name__)
 
 
-
-def collect_main_measure_types():
+def collect_treasury_measure_types():
     """
     Collect the configured TreasuryMeasureType
     """
     return TreasuryMeasureType.query()
 
 
-def get_new_grid(upload, company_id):
+class TreasuryMeasureCompiler(object):
+    def __init__(self, upload, operations):
+        self.upload = upload
+        self.operations = operations
+        self.session = DBSESSION()
+
+        self.measure_types = collect_treasury_measure_types()
+
+        self.grids = self._get_existing_grids()
+        self.measures = self._get_existing_measures(self.grids)
+
+    def _get_new_grid(self, company_id):
+        """
+        Build a new grid based on the given upload
+
+        :param int company_id: The associated company
+        """
+        return TreasuryMeasureGrid(
+            date=self.pload.date,
+            company_id=company_id,
+            upload=self.upload,
+        )
+
+    def _get_existing_grids(self):
+        """
+        Collect grids already built on the given upload
+
+        :returns: dict {'company_id': TreasuryMeasureGrid}
+        """
+        # Stores grids : {'company1_id': <TreasuryMeasureGrid>}
+        grids = {}
+        for grid in TreasuryMeasureGrid.query().filter_by(
+            upload_id=self.upload.id
+        ):
+            grids[grid.company_id] = grid
+        return grids
+
+    def _get_new_measure(self, label, grid_id, measure_type_id=None):
+        """
+        Build a new measure
+        """
+        measure = TreasuryMeasure(
+            label=label,
+            grid_id=grid_id,
+            measure_type_id=measure_type_id,
+        )
+        self.session.add(measure)
+        self.session.flush()
+        return measure
+
+    def _get_existing_measures(self, grids):
+        """
+        Build the measures dict based on the given existing grids
+        Also reset all values to 0
+        """
+        # Stores built measures {'company1_id': {'measure1_id': object,
+        # 'measure2_id': instance}, ...}
+        result = {}
+        for grid in grids.values():
+            company_measures = result[grid.company_id] = {}
+            for measure in grid.measures:
+                measure.value = 0
+                company_measures[measure.measure_type_id] = measure
+        return result
+
+    def process_datas(self):
+        """
+        Compile measures based on the given operations
+        """
+        for operation in self.operations:
+            if operation.company_id is None:
+                continue
+
+            grid = self.grids.get(operation.company_id)
+            if grid is None:
+                grid = self.grids[operation.company_id] = self._get_new_grid(
+                    operation.company_id
+                )
+                self.session.add(grid)
+                self.session.flush()
+
+            company_measures = self.measures.get(operation.company_id)
+            if company_measures is None:
+                company_measures = self.measures[operation.company_id] = {}
+
+            matched = False
+            for measure_type in self.measure_types:
+                if measure_type.match(operation.general_account):
+                    measure = company_measures.get(measure_type.id)
+                    if measure is None:
+                        measure = self._get_new_measure(
+                            measure_type.label,
+                            grid.id,
+                            measure_type.id
+                        )
+                        company_measures[measure_type.id] = measure
+
+                    measure.value += operation.total()
+                    matched = True
+
+            if matched:
+                self.session.merge(measure)
+        return self.grids
+
+
+def get_measure_compiler(data_type):
     """
-    Build a new grid based on the given upload
+    Retrieve the measure compilers to be used with this given type of datas
 
-    :param obj upload: A AccountingOperationUpload instance
-    :param int company_id: The associated company
+    :param str data_type: The type of data we build our measures from
+    :returns: The measure compiler
     """
-    return TreasuryMeasureGrid(
-        date=upload.date,
-        company_id=company_id,
-        upload=upload,
-    )
-
-
-def get_existing_grids(upload):
-    """
-    Collect grids already built on the given upload
-    """
-    grids = {}
-    for grid in TreasuryMeasureGrid.query().filter_by(upload_id=upload.id):
-        grids[grid.company_id] = grid
-    return grids
-
-
-def get_new_measure(label, grid_id, measure_type_id=None):
-    """
-    Build a new measure
-    """
-    session = DBSESSION()
-    measure = TreasuryMeasure(
-        label=label,
-        grid_id=grid_id,
-        measure_type_id=measure_type_id,
-    )
-    session.add(measure)
-    session.flush()
-    return measure
-
-
-def get_existing_measures(grids):
-    """
-    Build the measures dict based on the given existing grids
-    Also reset all values to 0
-    """
-    result = {}
-    for grid in grids.values():
-        company_measures = result[grid.company_id] = {}
-        for measure in grid.measures:
-            measure.value = 0
-            company_measures[measure.measure_type_id] = measure
-    return result
-
-
-def compile_measures(upload, operations):
-    """
-    Compile measures based on the given operations
-
-    :param obj upload: A AccountingOperationUpload instance
-    :param list operations: The associated AccountingOperation
-    """
-    session = DBSESSION()
-    measure_types = collect_main_measure_types()
-
-    # Stores grids : {'company1_id': <TreasuryMeasureGrid>}
-    grids = get_existing_grids(upload)
-
-    # Stores built measures {'company1_id': {'measure1_id': object,
-    # 'measure2_id': instance}, ...}
-    measures = get_existing_measures(grids)
-
-    for operation in operations:
-        if operation.company_id is None:
-            continue
-
-        grid = grids.get(operation.company_id)
-        if grid is None:
-            grid = grids[operation.company_id] = get_new_grid(
-                upload,
-                operation.company_id
-            )
-            session.add(grid)
-            session.flush()
-
-        company_measures = measures.get(operation.company_id)
-        if company_measures is None:
-            company_measures = measures[operation.company_id] = {}
-
-        matched = False
-        for measure_type in measure_types:
-            if measure_type.match(operation.general_account):
-                measure = company_measures.get(measure_type.id)
-                if measure is None:
-                    measure = get_new_measure(
-                        measure_type.label,
-                        grid.id,
-                        measure_type.id
-                    )
-                    company_measures[measure_type.id] = measure
-
-                measure.value += operation.total()
-                matched = True
-
-        if matched:
-            session.merge(measure)
-    return grids
+    if data_type == 'analytical_balance':
+        return TreasuryMeasureCompiler
+    elif data_type == 'general_ledger':
+        return None
 
 
 @celery_app.task(bind=True)
-def compile_measures_task(self, upload_id, operation_ids):
+def compile_measures_task(self, upload_type, upload_id, operation_ids):
     """
     Celery task handling measures compilation
     """
@@ -154,12 +164,15 @@ def compile_measures_task(self, upload_id, operation_ids):
     operations = AccountingOperation.query().filter_by(
         upload_id=upload_id
     ).all()
+
+    compiler = get_measure_compiler(upload_type)
     try:
-        grids = compile_measures(upload, operations)
+        compiler = compiler(upload, operations)
+        compiler.process_datas()
+        transaction.commit()
     except:
         transaction.abort()
     else:
-        transaction.commit()
         logger.info(u"{0} measure grids were handled".format(len(grids)))
         logger.info(u"The transaction has been commited")
         logger.info(u"* Task SUCCEEDED !!!")
