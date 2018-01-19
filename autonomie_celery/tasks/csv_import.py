@@ -782,12 +782,12 @@ def async_import_datas(
         )
         logger.info(u"Importing the datas")
         importer.import_datas()
+        transaction.commit()
     except Exception as e:
         transaction.abort()
         logger.exception(u"The transaction has been aborted")
         utils.record_failure(CsvImportJob, job_id, e)
     else:
-        transaction.commit()
         logger.info(u"We update the job informations")
         utils.record_completed(CsvImportJob, job_id, **importer.log())
     return ""

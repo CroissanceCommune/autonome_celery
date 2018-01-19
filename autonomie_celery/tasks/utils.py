@@ -97,12 +97,12 @@ def start_job(celery_request, job_model, job_id):
             _record_running(job)
         else:
             raise Exception(u"No job found")
+        transaction.commit()
     except:
         transaction.abort()
-    else:
-        transaction.commit()
+        raise Exception(u"Error while launching start_job")
 
-    transaction.begin()
+    logger.info(u"Task marked as RUNNING")
 
 
 def _record_job_status(job_model, job_id, status_str):
@@ -132,7 +132,7 @@ def record_failure(job_model, job_id, e=None, **kwargs):
         setattr(job, key, value)
 
     transaction.commit()
-    logger.info(u"* Task FAILED !!!")
+    logger.info(u"* Task marked as FAILED")
 
 
 def record_completed(job_model, job_id, **kwargs):
@@ -144,7 +144,7 @@ def record_completed(job_model, job_id, **kwargs):
     for key, value in kwargs.items():
         setattr(job, key, value)
     transaction.commit()
-    logger.info(u"* Task SUCCEEDED !!!")
+    logger.info(u"* Task marked as COMPLETED")
 
 
 def check_alive():

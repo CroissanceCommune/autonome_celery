@@ -241,6 +241,7 @@ def export_to_file(self, job_id, model_type, ids, filename='test',
             file_format,
         )
         logger.debug(u" -> The file %s been written", result_filename)
+        transaction.commit()
     except:
         transaction.abort()
         logger.exception("Error while generating file")
@@ -249,7 +250,6 @@ def export_to_file(self, job_id, model_type, ids, filename='test',
             FileGenerationJob, job_id, errors
         )
     else:
-        transaction.commit()
         utils.record_completed(
             FileGenerationJob, job_id, filename=result_filename
         )

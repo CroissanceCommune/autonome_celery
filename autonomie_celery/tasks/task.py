@@ -119,6 +119,7 @@ def async_mail_salarysheets(self, job_id, mails, force):
                 )
                 # Stores the history of this sent email
                 session.add(mail_history)
+            transaction.commit()
 
         except MailAlreadySent as e:
             transaction.abort()
@@ -149,7 +150,6 @@ def async_mail_salarysheets(self, job_id, mails, force):
             error_messages.append(u"{0}".format(e))
 
         else:
-            transaction.commit()
             mail_count += 1
             logger.info(u"The transaction has been commited")
             logger.info(u"* Part of the Task SUCCEEDED !!!")
