@@ -144,7 +144,7 @@ class AccountingDataParser(object):
     _supported_extensions = ('csv', 'slk')
     quotechar = '"'
     delimiter = ','
-    encoding = 'cp1252'
+    encoding = 'utf-8'
 
     # To be filled in subclasses
     _filename_re = None
@@ -326,7 +326,6 @@ class AccountingDataParser(object):
 
         else:
             logger.error(u"File {0} already loaded".format(self.file_path))
-            _mv_file(self.file_path)
             raise KnownError(
                 u"Ce fichier a déjà été traité : {0}".format(self.file_path)
             )
@@ -364,7 +363,7 @@ class GeneralLedgerParser(AccountingDataParser):
         :returns: An instance of AccountingOperation
         """
         result = None
-        if len(line_datas) > 7:
+        if len(line_datas) >= 8:
             if line_datas[0].strip() not in (
                 u"Compte analytique de l'entrepreneur",
                 u"Numéro analytique",
@@ -397,8 +396,8 @@ class GeneralLedgerParser(AccountingDataParser):
 class AnalyticalBalanceParser(AccountingDataParser):
     _filename_re = re.compile(
         '(?P<year>[0-9]+)'
-        '_(?P<month>[^_]+)'
-        '_(?P<day>[^_]+)'
+        '_(?P<month>[0-9]+)'
+        '_(?P<day>[0-9]+)'
         '_(?P<doctype>[^_]+)',
         re.IGNORECASE
     )
@@ -430,7 +429,7 @@ class AnalyticalBalanceParser(AccountingDataParser):
         :returns: An instance of AccountingOperation
         """
         result = None
-        if len(line_datas) > 7:
+        if len(line_datas) >= 7:
             if line_datas[0] not in (
                 u"Compte analytique de l'entrepreneur",
                 u"Numéro analytique",
@@ -615,10 +614,14 @@ def handle_pool_task(self):
                 logger.info(u" * Old datas cleaned successfully")
 
         transaction.begin()
-        logger.info(u" + Compiling Treasury measures")
+        logger.info(u" + Compiling the measures")
         # On rafraichit l'objet car nous sommes dans une nouvelle transaction
         # on évite ainsi le problème de "is not bound to a Session"
         upload_object = AccountingOperationUpload.get(upload_object_id)
+
+        logger.debug(" + Retrieved the upload object %s" % upload_object.date)
+        logger.debug(" + %s operations" % len(upload_object.operations))
+
         measure_compiler = get_measure_compiler(parser.file_type)
 
         try:

@@ -14,10 +14,15 @@ from autonomie.models.accounting.operations import (
     AccountingOperationUpload,
     AccountingOperation,
 )
-from autonomie.models.accounting.measures import (
+from autonomie.models.accounting.treasury_measures import (
     TreasuryMeasure,
     TreasuryMeasureGrid,
     TreasuryMeasureType,
+)
+from autonomie.models.accounting.general_ledger_measures import (
+    GeneralLedgerMeasure,
+    GeneralLedgerMeasureGrid,
+    GeneralLedgerMeasureType,
 )
 
 from autonomie_celery.tasks import utils
@@ -26,45 +31,36 @@ from autonomie_celery.tasks import utils
 logger = utils.get_logger(__name__)
 
 
-def collect_treasury_measure_types():
+class BaseMeasureCompiler(object):
     """
-    Collect the configured TreasuryMeasureType
+    Base measure compiler
     """
-    return TreasuryMeasureType.query()
+    measure_type_class = None
+    measure_grid_class = None
+    measure_class = None
 
-
-class TreasuryMeasureCompiler(object):
     def __init__(self, upload, operations):
         self.upload = upload
         self.operations = operations
         self.session = DBSESSION()
 
-        self.measure_types = collect_treasury_measure_types()
+        self.measure_types = self._collect_measure_types()
 
         self.grids = self._get_existing_grids()
         self.measures = self._get_existing_measures(self.grids)
 
-    def _get_new_grid(self, company_id):
-        """
-        Build a new grid based on the given upload
-
-        :param int company_id: The associated company
-        """
-        return TreasuryMeasureGrid(
-            date=self.pload.date,
-            company_id=company_id,
-            upload=self.upload,
-        )
+    def _collect_measure_types(self):
+        return self.measure_type_class.query().filter_by(active=True)
 
     def _get_existing_grids(self):
         """
-        Collect grids already built on the given upload
+        Collect grids already built on the given upload (for each company)
 
-        :returns: dict {'company_id': TreasuryMeasureGrid}
+        :returns: dict {'company_id': <Type>MeasureGrid}
         """
         # Stores grids : {'company1_id': <TreasuryMeasureGrid>}
         grids = {}
-        for grid in TreasuryMeasureGrid.query().filter_by(
+        for grid in self.measure_grid_class.query().filter_by(
             upload_id=self.upload.id
         ):
             grids[grid.company_id] = grid
@@ -74,7 +70,7 @@ class TreasuryMeasureCompiler(object):
         """
         Build a new measure
         """
-        measure = TreasuryMeasure(
+        measure = self.measure_class(
             label=label,
             grid_id=grid_id,
             measure_type_id=measure_type_id,
@@ -138,6 +134,43 @@ class TreasuryMeasureCompiler(object):
         return self.grids
 
 
+class TreasuryMeasureCompiler(BaseMeasureCompiler):
+    measure_type_class = TreasuryMeasureType
+    measure_grid_class = TreasuryMeasureGrid
+    measure_class = TreasuryMeasure
+
+    def _get_new_grid(self, company_id):
+        """
+        Build a new grid based on the given upload
+
+        :param int company_id: The associated company
+        """
+        return TreasuryMeasureGrid(
+            date=self.upload.date,
+            company_id=company_id,
+            upload=self.upload,
+        )
+
+
+class GeneralLedgerMeasureCompiler(BaseMeasureCompiler):
+    measure_type_class = GeneralLedgerMeasureType
+    measure_grid_class = GeneralLedgerMeasureGrid
+    measure_class = GeneralLedgerMeasure
+
+    def _get_new_grid(self, company_id):
+        """
+        Build a new grid based on the given upload
+
+        :param int company_id: The associated company
+        """
+        return GeneralLedgerMeasureGrid(
+            year=self.upload.year,
+            month=self.upload.month,
+            company_id=company_id,
+            upload=self.upload,
+        )
+
+
 def get_measure_compiler(data_type):
     """
     Retrieve the measure compilers to be used with this given type of datas
@@ -148,7 +181,7 @@ def get_measure_compiler(data_type):
     if data_type == 'analytical_balance':
         return TreasuryMeasureCompiler
     elif data_type == 'general_ledger':
-        return None
+        return GeneralLedgerMeasureCompiler
 
 
 @celery_app.task(bind=True)
@@ -168,7 +201,7 @@ def compile_measures_task(self, upload_type, upload_id, operation_ids):
     compiler = get_measure_compiler(upload_type)
     try:
         compiler = compiler(upload, operations)
-        compiler.process_datas()
+        grids = compiler.process_datas()
         transaction.commit()
     except:
         transaction.abort()
