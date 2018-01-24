@@ -294,6 +294,18 @@ class AccountingDataParser(object):
             entry[0] for entry in DBSESSION().query(AccountingOperation.id)
         ]
 
+    def _get_num_val(self, line, index):
+        """
+        Retreieve the numeric value found at index in the line_datas list
+
+        :param list line: List of datas coming from parsed file
+        :param int index: The index in which we should retrieve the datas
+        """
+        result = 0
+        if len(line) > index:
+            result = line[index].strip() or 0
+        return result
+
     def process_file(self):
         """
         Process file parsing
@@ -364,7 +376,7 @@ class GeneralLedgerParser(AccountingDataParser):
         :returns: An instance of AccountingOperation
         """
         result = None
-        if len(line_datas) >= 8:
+        if len(line_datas) >= 6:
             if line_datas[0].strip() not in (
                 u"Compte analytique de l'entrepreneur",
                 u"Numéro analytique",
@@ -372,11 +384,10 @@ class GeneralLedgerParser(AccountingDataParser):
                 analytical_account = line_datas[0].strip()
                 general_account = line_datas[1].strip()
                 label = line_datas[5].strip()
-                debit = line_datas[6].strip() or 0
-                credit = line_datas[7].strip() or 0
+                debit = self._get_num_val(line_datas, index=6)
+                credit = self._get_num_val(line_datas, index=7)
                 balance = 0
                 company_id = self._find_company_id(analytical_account)
-                logger.debug(line_datas)
                 result = AccountingOperation(
                     analytical_account=analytical_account,
                     general_account=general_account,
@@ -430,7 +441,7 @@ class AnalyticalBalanceParser(AccountingDataParser):
         :returns: An instance of AccountingOperation
         """
         result = None
-        if len(line_datas) >= 7:
+        if len(line_datas) >= 5:
             if line_datas[0] not in (
                 u"Compte analytique de l'entrepreneur",
                 u"Numéro analytique",
@@ -438,9 +449,9 @@ class AnalyticalBalanceParser(AccountingDataParser):
                 analytical_account = line_datas[0].strip()
                 general_account = line_datas[2].strip()
                 label = line_datas[3].strip()
-                debit = line_datas[4].strip() or 0
-                credit = line_datas[5].strip() or 0
-                balance = line_datas[6].strip() or 0
+                debit = self._get_num_val(line_datas, index=4)
+                credit = self._get_num_val(line_datas, index=5)
+                balance = self._get_num_val(line_datas, index=6)
                 company_id = self._find_company_id(analytical_account)
                 result = AccountingOperation(
                     analytical_account=analytical_account,
@@ -528,7 +539,7 @@ def send_success(request, mail_address, filename, new_entries, missing):
     )
 
 
-def _get_parser(filename):
+def _get_parser_factory(filename):
     """
     Find out which type of file we handle and return the associated parser
 
@@ -562,13 +573,14 @@ def handle_pool_task(self):
             setattr(self.request, "registry", _get_registry())
 
         filename = os.path.basename(file_to_parse)
-        parser_cls = _get_parser(filename)
-        parser = parser_cls(file_to_parse)
+        parser_factory = _get_parser_factory(filename)
+        parser = parser_factory(file_to_parse)
 
         transaction.begin()
         logger.info(u"  + Storing accounting operations in database")
         try:
-            upload_object_id, missed_associations, old_ids = parser.process_file()
+            upload_object_id, missed_associations, old_ids = \
+                parser.process_file()
             logger.debug(u"  + File was processed")
             transaction.commit()
         except KnownError as err:
@@ -619,14 +631,18 @@ def handle_pool_task(self):
         # On rafraichit l'objet car nous sommes dans une nouvelle transaction
         # on évite ainsi le problème de "is not bound to a Session"
         upload_object = AccountingOperationUpload.get(upload_object_id)
+        num_operations = len(upload_object.operations)
 
         logger.debug(" + Retrieved the upload object %s" % upload_object.date)
-        logger.debug(" + %s operations" % len(upload_object.operations))
+        logger.debug(" + %s operations" % num_operations)
 
-        measure_compiler = get_measure_compiler(parser.filetype)
+        measure_compiler_factory = get_measure_compiler(parser.filetype)
 
         try:
-            measure_compiler(upload_object, upload_object.operations)
+            measure_compiler = measure_compiler_factory(
+                upload_object, upload_object.operations
+            )
+            measure_compiler.process_datas()
             transaction.commit()
         except KnownError as err:
             transaction.abort()
@@ -659,7 +675,7 @@ def handle_pool_task(self):
                     self.request,
                     mail_address,
                     filename,
-                    len(upload_object.operations),
+                    num_operations,
                     missed_associations,
                 )
                 logger.info(
