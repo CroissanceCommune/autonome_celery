@@ -148,7 +148,7 @@ class AccountingDataParser(object):
 
     # To be filled in subclasses
     _filename_re = None
-    file_type = None
+    filetype = None
 
     def __init__(self, file_path, force=False):
         self.file_path = file_path
@@ -187,7 +187,7 @@ class AccountingDataParser(object):
         self._file_datas['basename'] = basename
         self._file_datas['extension'] = extension
         self._file_datas['md5sum'] = _get_md5sum(self.file_path)
-        self._file_datas['file_type'] = self.file_type
+        self._file_datas['filetype'] = self.filetype
         return self._file_datas
 
     def _stream_slk(self):
@@ -245,6 +245,7 @@ class AccountingDataParser(object):
             filename=os.path.basename(self.file_path),
             date=self._file_datas['date'],
             md5sum=self._file_datas['md5sum'],
+            filetype=self._file_datas['filetype'],
         )
 
     def _build_operation(self, line_datas):
@@ -338,7 +339,7 @@ class GeneralLedgerParser(AccountingDataParser):
         '_(?P<doctype>[^_]+)',
         re.IGNORECASE
     )
-    file_type = 'general_ledger'
+    filetype = 'general_ledger'
 
     def _collect_specific_file_infos(self):
         """
@@ -401,7 +402,7 @@ class AnalyticalBalanceParser(AccountingDataParser):
         '_(?P<doctype>[^_]+)',
         re.IGNORECASE
     )
-    file_type = 'analytical_balance'
+    filetype = 'analytical_balance'
 
     def _collect_specific_file_infos(self):
         """
@@ -622,7 +623,7 @@ def handle_pool_task(self):
         logger.debug(" + Retrieved the upload object %s" % upload_object.date)
         logger.debug(" + %s operations" % len(upload_object.operations))
 
-        measure_compiler = get_measure_compiler(parser.file_type)
+        measure_compiler = get_measure_compiler(parser.filetype)
 
         try:
             measure_compiler(upload_object, upload_object.operations)
