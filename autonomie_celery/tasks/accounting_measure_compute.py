@@ -19,10 +19,10 @@ from autonomie.models.accounting.treasury_measures import (
     TreasuryMeasureGrid,
     TreasuryMeasureType,
 )
-from autonomie.models.accounting.general_ledger_measures import (
-    GeneralLedgerMeasure,
-    GeneralLedgerMeasureGrid,
-    GeneralLedgerMeasureType,
+from autonomie.models.accounting.income_statement_measures import (
+    IncomeStatementMeasure,
+    IncomeStatementMeasureGrid,
+    IncomeStatementMeasureType,
 )
 
 from autonomie_celery.tasks import utils
@@ -98,6 +98,7 @@ class BaseMeasureCompiler(object):
         """
         Compile measures based on the given operations
         """
+        logger.debug("    + Processing datas")
         for operation in self.operations:
             if operation.company_id is None:
                 continue
@@ -131,6 +132,7 @@ class BaseMeasureCompiler(object):
 
             if matched:
                 self.session.merge(measure)
+
         return self.grids
 
 
@@ -152,10 +154,10 @@ class TreasuryMeasureCompiler(BaseMeasureCompiler):
         )
 
 
-class GeneralLedgerMeasureCompiler(BaseMeasureCompiler):
-    measure_type_class = GeneralLedgerMeasureType
-    measure_grid_class = GeneralLedgerMeasureGrid
-    measure_class = GeneralLedgerMeasure
+class IncomeStatementMeasureCompiler(BaseMeasureCompiler):
+    measure_type_class = IncomeStatementMeasureType
+    measure_grid_class = IncomeStatementMeasureGrid
+    measure_class = IncomeStatementMeasure
 
     def _get_new_grid(self, company_id):
         """
@@ -163,9 +165,9 @@ class GeneralLedgerMeasureCompiler(BaseMeasureCompiler):
 
         :param int company_id: The associated company
         """
-        return GeneralLedgerMeasureGrid(
-            year=self.upload.year,
-            month=self.upload.month,
+        return IncomeStatementMeasureGrid(
+            year=self.upload.date.year,
+            month=self.upload.date.month,
             company_id=company_id,
             upload=self.upload,
         )
@@ -179,13 +181,15 @@ def get_measure_compiler(data_type):
     :returns: The measure compiler
     """
     if data_type == 'analytical_balance':
+        logger.info("  + Handling analytical_balance file")
         return TreasuryMeasureCompiler
     elif data_type == 'general_ledger':
-        return GeneralLedgerMeasureCompiler
+        logger.info("  + Handling General Ledger file")
+        return IncomeStatementMeasureCompiler
 
 
 @celery_app.task(bind=True)
-def compile_measures_task(self, upload_type, upload_id, operation_ids):
+def compile_measures_task(self, upload_id):
     """
     Celery task handling measures compilation
     """
@@ -198,12 +202,13 @@ def compile_measures_task(self, upload_type, upload_id, operation_ids):
         upload_id=upload_id
     ).all()
 
-    compiler = get_measure_compiler(upload_type)
+    compiler_factory = get_measure_compiler(upload.filetype)
     try:
-        compiler = compiler(upload, operations)
+        compiler = compiler_factory(upload, operations)
         grids = compiler.process_datas()
         transaction.commit()
     except:
+        logger.exception(u"Error while generating measures")
         transaction.abort()
     else:
         logger.info(u"{0} measure grids were handled".format(len(grids)))
