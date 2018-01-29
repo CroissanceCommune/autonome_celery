@@ -30,7 +30,7 @@ from sylk_parser import SylkParser
 
 from pyramid_celery import celery_app
 from autonomie_base.mail import send_mail
-from autonomie_base.utils import csv_tools
+from autonomie_base.utils import csv_tools, date as date_utils
 from autonomie_base.models.base import DBSESSION
 from autonomie_base.utils.math import convert_to_float
 from autonomie.models.config import get_admin_mail
@@ -383,6 +383,7 @@ class GeneralLedgerParser(AccountingDataParser):
             ):
                 analytical_account = line_datas[0].strip()
                 general_account = line_datas[1].strip()
+                date = date_utils.str_to_date(line_datas[3].strip())
                 label = line_datas[5].strip()
                 debit = self._get_num_val(line_datas, index=6)
                 credit = self._get_num_val(line_datas, index=7)
@@ -391,6 +392,7 @@ class GeneralLedgerParser(AccountingDataParser):
                 result = AccountingOperation(
                     analytical_account=analytical_account,
                     general_account=general_account,
+                    date=date,
                     label=label,
                     debit=convert_to_float(debit),
                     credit=convert_to_float(credit),
@@ -556,7 +558,7 @@ def _get_parser_factory(filename):
 
 
 @celery_app.task(bind=True)
-def handle_pool_task(self):
+def handle_pool_task(self, force=False):
     """
     Parse the files present in the configured file pool
     """
@@ -574,7 +576,7 @@ def handle_pool_task(self):
 
         filename = os.path.basename(file_to_parse)
         parser_factory = _get_parser_factory(filename)
-        parser = parser_factory(file_to_parse)
+        parser = parser_factory(file_to_parse, force)
 
         transaction.begin()
         logger.info(u"  + Storing accounting operations in database")
