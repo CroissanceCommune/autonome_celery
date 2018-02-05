@@ -383,7 +383,12 @@ class GeneralLedgerParser(AccountingDataParser):
             ):
                 analytical_account = line_datas[0].strip()
                 general_account = line_datas[1].strip()
-                date = date_utils.str_to_date(line_datas[3].strip())
+                date = date_utils.str_to_date(line_datas[2].strip())
+                if not date:
+                    logger.error(
+                        u"This line has incorrect datas : %s" % line_datas
+                    )
+                    return None
                 label = line_datas[5].strip()
                 debit = self._get_num_val(line_datas, index=6)
                 credit = self._get_num_val(line_datas, index=7)
@@ -576,11 +581,17 @@ def handle_pool_task(self, force=False):
 
         filename = os.path.basename(file_to_parse)
         parser_factory = _get_parser_factory(filename)
-        parser = parser_factory(file_to_parse, force)
-
-        transaction.begin()
-        logger.info(u"  + Storing accounting operations in database")
+        if parser_factory is None:
+            err = Exception("Type de fichier inconnu")
+            send_error(self.request, mail_address, filename, err)
+            logger.error(u"Incorrect file type : %s" % filename)
+            _mv_file(file_to_parse, "error")
+            return False
         try:
+            parser = parser_factory(file_to_parse, force)
+
+            transaction.begin()
+            logger.info(u"  + Storing accounting operations in database")
             upload_object_id, missed_associations, old_ids = \
                 parser.process_file()
             logger.debug(u"  + File was processed")
