@@ -1,5 +1,5 @@
 [app:main]
-use = egg:autonomie_celery
+use = egg:autonomie_celery#worker
 
 pyramid.default_locale_name = fr_FR
 pyramid.includes =
@@ -38,6 +38,7 @@ cache.long_term.expire = 20
 autonomie.static_tmp=/tmp/
 # The instance name
 autonomie.instance_name=intranet.local.fr
+autonomie.parsing_pool_parent = /home/gas/autonomie/celery_pool
 
 [celery]
 BROKER_URL = redis://localhost:6379/0
