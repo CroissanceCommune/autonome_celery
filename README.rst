@@ -22,6 +22,20 @@ return datas.
 Autonomie celery provides all the models that should be used to store task
 execution related stuff (see autonomie_celery.models).
 
+Install
+-------
+
+
+.. code-block:: console
+
+    git clone https://github.com/CroissanceCommune/autonomie_celery.git
+    cd autonomie_celery
+    python setup.py install
+    cp development.ini.sample development.ini
+
+Customize the development.ini file as needed
+
+
 Start it
 ---------
 

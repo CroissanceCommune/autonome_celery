@@ -9,14 +9,14 @@ pyramid.includes =
 
 ####  MAIL FROM WITHIN THE APPLICATION ####
 # Add this one to pyramid.includes if you configured a mailbox
-mail.host = mysmtp
-mail.port=587
-mail.username=<mailbox>
-mail.password=<mailbox_password>
-mail.tls=True
-mail.default_sender=<mailbox>
-mail.optout_address=<optout_address>
-mail.bounce_url=<bound_address>
+# mail.host = mysmtp
+# mail.port=587
+# mail.username=<mailbox>
+# mail.password=<mailbox_password>
+# mail.tls=True
+# mail.default_sender=<mailbox>
+# mail.optout_address=<optout_address>
+# mail.bounce_url=<bound_address>
 
 #### DATABASE ACCESS CONFIGURATION ####
 sqlalchemy.url = mysql://autonomie:autonomie@localhost/autonomie?charset=utf8
@@ -43,18 +43,19 @@ autonomie.instance_name=intranet.local.fr
 BROKER_URL = redis://localhost:6379/0
 CELERY_IMPORTS =
     autonomie_celery.tasks.task
+    autonomie_celery.tasks.csv_import
     autonomie_celery.tasks.export
-    autonomie_celery.schedulers
+    autonomie_celery.tasks.accounting_measure_compute
+    autonomie_celery.tasks.accounting_parser
 
 CELERY_TASK_SERIALIZER = json
-#CELERYD_HIJACK_ROOT_LOGGER = False
 CELERY_ACCEPT_CONTENT= json
                        yaml
 
 [celerybeat:accounting_parser]
 task = autonomie_celery.tasks.accounting_parser.handle_pool_task
 type = timedelta
-schedule = {"seconds": 600}
+schedule = {"seconds": 30}
 
 [server:main]
 use = egg:waitress#main
@@ -80,7 +81,12 @@ keys = generic, sqlfile
 [logger_root]
 level = DEBUG
 handlers = file, console
-propagate = 0
+propagate = 1
+
+[logger_autonomie_celery]
+level=DEBUG
+handlers=file, console
+qualname=autonomie_celery
 
 [logger_sqlalchemy]
 level = INFO
@@ -112,7 +118,7 @@ formatter = generic
 [handler_celery_file]
 class = FileHandler
 args = ('celery.log','a')
-level = DEBUG
+level = INFO
 formatter = generic
 
 [handler_sqlfile]
