@@ -25,6 +25,36 @@ execution related stuff (see autonomie_celery.models).
 Install
 -------
 
+System packages
+................
+
+autonmie_celery needs a redis server to run
+
+On Debian
+
+.. code-block:: console
+
+    apt-get install redis-server
+
+
+On Fedora
+
+.. code-block:: console
+
+    dnf install redis-server
+
+Python stuff
+.............
+
+autonomie_celery should be run in the same environment as Autonomie :
+https://github.com/CroissanceCommune/autonomie
+
+You may first run
+
+.. code-block:: console
+
+    workon autonomie
+
 
 .. code-block:: console
 
