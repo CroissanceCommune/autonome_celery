@@ -506,49 +506,58 @@ Les indicateurs ont été générés depuis ces écritures.
 
 def send_error(request, mail_address, filename, err):
     if mail_address:
-        message = MAIL_ERROR_BODY.format(
-            error=err.message,
-            filename=filename
-        )
-        subject = MAIL_ERROR_SUBJECT.format(filename=filename)
-        send_mail(
-            request,
-            mail_address,
-            message,
-            subject,
-        )
+        try:
+            message = MAIL_ERROR_BODY.format(
+                error=err.message,
+                filename=filename
+            )
+            subject = MAIL_ERROR_SUBJECT.format(filename=filename)
+            send_mail(
+                request,
+                mail_address,
+                message,
+                subject,
+            )
+        except:
+            logger.exception("send_success error")
 
 
 def send_unknown_error(request, mail_address, filename, err):
     if mail_address:
-        subject = MAIL_ERROR_SUBJECT.format(filename=filename)
-        print(err.message)
-        message = MAIL_UNKNOWN_ERROR_BODY.format(
-            error=err.message,
-            filename=filename
-        )
-        send_mail(
-            request,
-            mail_address,
-            message,
-            subject,
-        )
+        try:
+            subject = MAIL_ERROR_SUBJECT.format(filename=filename)
+            print(err.message)
+            message = MAIL_UNKNOWN_ERROR_BODY.format(
+                error=err.message,
+                filename=filename
+            )
+            send_mail(
+                request,
+                mail_address,
+                message,
+                subject,
+            )
+        except:
+            logger.exception("send_success error")
 
 
 def send_success(request, mail_address, filename, new_entries, missing):
     if mail_address:
-        subject = MAIL_SUCCESS_SUBJECT.format(filename)
-        message = MAIL_SUCCESS_BODY.format(
-            filename,
-            new_entries,
-            missing,
-        )
-        send_mail(
-            request,
-            mail_address,
-            message,
-            subject,
-        )
+        try:
+            subject = MAIL_SUCCESS_SUBJECT.format(filename)
+            message = MAIL_SUCCESS_BODY.format(
+                filename,
+                new_entries,
+                missing,
+            )
+            send_mail(
+                request,
+                mail_address,
+                message,
+                subject,
+            )
+        except:
+            logger.exception("send_success error")
 
 
 def _get_parser_factory(filename):
