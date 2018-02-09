@@ -346,6 +346,7 @@ class AccountingDataParser(object):
 
 class GeneralLedgerParser(AccountingDataParser):
     _filename_re = re.compile(
+        'general_ledger_'
         '(?P<year>[0-9]+)'
         '_(?P<month>[^_]+)'
         '_(?P<doctype>[^_]+)',
@@ -414,6 +415,7 @@ class GeneralLedgerParser(AccountingDataParser):
 
 class AnalyticalBalanceParser(AccountingDataParser):
     _filename_re = re.compile(
+        'analytical_balance_'
         '(?P<year>[0-9]+)'
         '_(?P<month>[0-9]+)'
         '_(?P<day>[0-9]+)'
