@@ -11,7 +11,7 @@ from sqlalchemy import (
 
 from autonomie_base.utils.renderers import configure_export
 from autonomie.utils.strings import format_amount
-from autonomie.models.user import UserDatas
+from autonomie.models.user.userdatas import UserDatas
 from autonomie.models.customer import Customer
 from autonomie.models.tva import Tva
 from autonomie.models.task import Task
