@@ -9,6 +9,7 @@ Tasks used to compile treasury measures
 import transaction
 
 from pyramid_celery import celery_app
+from sqlalchemy import or_
 from autonomie_base.models.base import DBSESSION
 from autonomie.models.accounting.operations import (
     AccountingOperationUpload,
@@ -228,7 +229,10 @@ class IncomeStatementMeasureCompiler(BaseMeasureCompiler):
         ).filter_by(
             active=True
         ).filter(
-            IncomeStatementMeasureType.account_prefix != ''
+            or_(
+                IncomeStatementMeasureType.is_total == False,
+                IncomeStatementMeasureType.total_type == 'account_prefix',
+            )
         )
 
     def get_cache_key_from_operation(self, operation):
