@@ -596,7 +596,11 @@ def handle_pool_task(self, force=False):
         filename = os.path.basename(file_to_parse)
         parser_factory = _get_parser_factory(filename)
         if parser_factory is None:
-            err = Exception("Type de fichier inconnu")
+            err = Exception(
+                u"Type de fichier inconnu, le nom du fichier ne "
+                u"respecte pas les nomenclatures de nommage des "
+                u"fichiers de trésorerie"
+            )
             send_error(self.request, mail_address, filename, err)
             logger.error(u"Incorrect file type : %s" % filename)
             _mv_file(file_to_parse, "error")
