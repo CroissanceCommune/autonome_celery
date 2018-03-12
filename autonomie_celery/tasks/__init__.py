@@ -26,7 +26,7 @@ def _add_userdatas_custom_headers(writer, query):
     Add headers for code_compta
     """
     from autonomie_base.models.base import DBSESSION
-    from autonomie.models.user import COMPANY_EMPLOYEE
+    from autonomie.models.user.user import COMPANY_EMPLOYEE
     # Compte analytique
     query = DBSESSION().query(
         func.count(COMPANY_EMPLOYEE.c.company_id).label('nb')
