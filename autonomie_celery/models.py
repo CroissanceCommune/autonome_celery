@@ -51,7 +51,6 @@ from autonomie_base.models.base import (
 )
 from sqlalchemy.orm import (
     relationship,
-    backref,
 )
 
 
@@ -222,7 +221,6 @@ class MailHistory(DBBASE):
     company_id = Column(ForeignKey('company.id'), nullable=True)
     company = relationship(
         "Company",
-        backref=backref('mail_history'),
     )
 
     @property
