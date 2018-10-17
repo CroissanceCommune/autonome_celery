@@ -10,7 +10,7 @@ from sqlalchemy import (
 )
 
 from autonomie_base.utils.renderers import configure_export
-from autonomie.utils.strings import format_amount
+from autonomie.compute.math_utils import integer_to_amount
 from autonomie.models.user.userdatas import UserDatas
 from autonomie.models.customer import Customer
 from autonomie.models.tva import Tva
@@ -92,30 +92,12 @@ def _add_invoice_datas(writer, invoice):
     datas = []
     for tva in Tva.query():
         datas.append(
-            format_amount(
-                ht_values.get(tva.value, 0),
-                precision=5,
-                trim=False,
-                grouping=False,
-            )
+            integer_to_amount(ht_values.get(tva.value, 0), precision=5)
         )
         datas.append(
-            format_amount(
-                tva_values.get(tva.value, 0),
-                precision=5,
-                trim=False,
-                grouping=False,
-
-            )
+            integer_to_amount(tva_values.get(tva.value, 0), precision=5)
         )
-    datas.append(
-        format_amount(
-            invoice.ttc,
-            precision=5,
-            trim=False,
-            grouping=False
-        )
-    )
+    datas.append(integer_to_amount(invoice.ttc, precision=5))
     writer.add_extra_datas(datas)
     return writer
 
