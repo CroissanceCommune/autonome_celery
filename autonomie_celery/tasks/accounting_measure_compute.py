@@ -125,9 +125,7 @@ class BaseMeasureCompiler(object):
         """
         # Stores grids : {'company1_id': <TreasuryMeasureGrid>}
         grids = {}
-        for grid in self.measure_grid_class.query().filter_by(
-            upload_id=self.upload.id
-        ):
+        for grid in self.measure_grid_class.query():
             key = self.get_cache_key_from_grid(grid)
             grids[key] = grid
         return grids
