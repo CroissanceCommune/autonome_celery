@@ -39,6 +39,11 @@ from autonomie.models.accounting.operations import (
     AccountingOperationUpload,
     AccountingOperation,
 )
+from autonomie_celery.conf import (
+    get_setting,
+    get_registry,
+    get_sysadmin_mail,
+)
 from autonomie_celery.tasks import utils
 from autonomie_celery.tasks.accounting_measure_compute import (
     get_measure_compiler
@@ -56,15 +61,11 @@ FILENAME_ERROR = (
 )
 
 
-def _get_registry():
-    return celery_app.conf['PYRAMID_REGISTRY']
-
-
 def _get_base_path():
     """
     Retreive the base working path as configured in the ini file
     """
-    return _get_registry().settings['autonomie.parsing_pool_parent']
+    return get_setting('autonomie.parsing_pool_parent', mandatory=True)
 
 
 def _get_path(directory):
@@ -504,8 +505,11 @@ Les indicateurs ont été générés depuis ces écritures.
 """
 
 
-def send_error(request, mail_address, filename, err):
-    if mail_address:
+def send_error(request, mail_addresses, filename, err):
+    """
+    Send an error email to mail_addresses
+    """
+    if mail_addresses:
         try:
             message = MAIL_ERROR_BODY.format(
                 error=err.message,
@@ -514,7 +518,7 @@ def send_error(request, mail_address, filename, err):
             subject = MAIL_ERROR_SUBJECT.format(filename=filename)
             send_mail(
                 request,
-                mail_address,
+                mail_addresses,
                 message,
                 subject,
             )
@@ -522,8 +526,8 @@ def send_error(request, mail_address, filename, err):
             logger.exception("send_success error")
 
 
-def send_unknown_error(request, mail_address, filename, err):
-    if mail_address:
+def send_unknown_error(request, mail_addresses, filename, err):
+    if mail_addresses:
         try:
             subject = MAIL_ERROR_SUBJECT.format(filename=filename)
             print(err.message)
@@ -533,7 +537,7 @@ def send_unknown_error(request, mail_address, filename, err):
             )
             send_mail(
                 request,
-                mail_address,
+                mail_addresses,
                 message,
                 subject,
             )
@@ -541,8 +545,8 @@ def send_unknown_error(request, mail_address, filename, err):
             logger.exception("send_success error")
 
 
-def send_success(request, mail_address, filename, new_entries, missing):
-    if mail_address:
+def send_success(request, mail_addresses, filename, new_entries, missing):
+    if mail_addresses:
         try:
             subject = MAIL_SUCCESS_SUBJECT.format(filename)
             message = MAIL_SUCCESS_BODY.format(
@@ -552,7 +556,7 @@ def send_success(request, mail_address, filename, new_entries, missing):
             )
             send_mail(
                 request,
-                mail_address,
+                mail_addresses,
                 message,
                 subject,
             )
@@ -589,9 +593,16 @@ def handle_pool_task(self, force=False):
 
     else:
         logger.info(u"Parsing an accounting file : %s" % file_to_parse)
-        mail_address = get_admin_mail()
-        if mail_address:
-            setattr(self.request, "registry", _get_registry())
+        _admin_mail = get_admin_mail()
+        _sysadmin_mail = get_sysadmin_mail()
+        mail_addresses = []
+        if _admin_mail:
+            mail_addresses.append(_admin_mail)
+        if _sysadmin_mail:
+            mail_addresses.append(_sysadmin_mail)
+
+        if mail_addresses:
+            setattr(self.request, "registry", get_registry())
 
         filename = os.path.basename(file_to_parse)
         parser_factory = _get_parser_factory(filename)
@@ -601,7 +612,7 @@ def handle_pool_task(self, force=False):
                 u"respecte pas les nomenclatures de nommage des "
                 u"fichiers de trésorerie"
             )
-            send_error(self.request, mail_address, filename, err)
+            send_error(self.request, mail_addresses, filename, err)
             logger.error(u"Incorrect file type : %s" % filename)
             _mv_file(file_to_parse, "error")
             return False
@@ -618,10 +629,10 @@ def handle_pool_task(self, force=False):
             transaction.abort()
             logger.exception(u"KnownError : %s" % err.message)
             logger.exception(u"* FAILED : transaction has been rollbacked")
-            if mail_address:
-                send_error(self.request, mail_address, filename, err)
+            if mail_addresses:
+                send_error(self.request, mail_addresses, filename, err)
                 logger.error(
-                    u"An error mail has been sent to {0}".format(mail_address)
+                    u"An error mail has been sent to {0}".format(mail_addresses)
                 )
             _mv_file(file_to_parse, 'error')
             logger.error(u"File has been moved to error directory")
@@ -631,10 +642,10 @@ def handle_pool_task(self, force=False):
             transaction.abort()
             logger.exception(u"Unkown Error")
             logger.exception(u"* FAILED : transaction has been rollbacked")
-            if mail_address:
-                send_unknown_error(self.request, mail_address, filename, err)
+            if mail_addresses:
+                send_unknown_error(self.request, mail_addresses, filename, err)
                 logger.error(
-                    u"An error mail has been sent to {0}".format(mail_address)
+                    u"An error mail has been sent to {0}".format(mail_addresses)
                 )
             _mv_file(file_to_parse, 'error')
             logger.error(u"File has been moved to error directory")
@@ -678,10 +689,10 @@ def handle_pool_task(self, force=False):
         except KnownError as err:
             transaction.abort()
             logger.exception(u"KnownError : %s" % err.message)
-            if mail_address:
-                send_error(self.request, mail_address, filename, err)
+            if mail_addresses:
+                send_error(self.request, mail_addresses, filename, err)
                 logger.error(
-                    u"An error mail has been sent to {0}".format(mail_address)
+                    u"An error mail has been sent to {0}".format(mail_addresses)
                 )
             logger.exception(u"* FAILED : transaction has been rollbacked")
             return False
@@ -689,10 +700,10 @@ def handle_pool_task(self, force=False):
         except Exception as err:
             transaction.abort()
             logger.exception(u"Unkown Error")
-            if mail_address:
-                send_unknown_error(self.request, mail_address, filename, err)
+            if mail_addresses:
+                send_unknown_error(self.request, mail_addresses, filename, err)
                 logger.error(
-                    u"An error mail has been sent to {0}".format(mail_address)
+                    u"An error mail has been sent to {0}".format(mail_addresses)
                 )
             logger.exception(u"* FAILED : transaction has been rollbacked")
             return False
@@ -701,14 +712,16 @@ def handle_pool_task(self, force=False):
             logger.info(u"Measure computing transaction has been commited")
             logger.info(u"* SUCCEEDED !!!")
 
-            if mail_address:
+            if mail_addresses:
                 send_success(
                     self.request,
-                    mail_address,
+                    mail_addresses,
                     filename,
                     num_operations,
                     missed_associations,
                 )
                 logger.info(
-                    u"A success email has been sent to {0}".format(mail_address)
+                    u"A success email has been sent to {0}".format(
+                        mail_addresses
+                    )
                 )

@@ -38,7 +38,10 @@ cache.long_term.expire = 20
 autonomie.static_tmp=/tmp/
 # The instance name
 autonomie.instance_name=intranet.local.fr
+# Pool where general_ledger and analytical balances are placed for treatment
 autonomie.parsing_pool_parent = /home/gas/autonomie/celery_pool
+# Sysadmin mail address (used to send information messages)
+autonomie.sysadmin_mail=admin@local.fr
 
 [celery]
 BROKER_URL = redis://localhost:6379/0

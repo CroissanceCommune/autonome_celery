@@ -37,7 +37,7 @@ from sqlalchemy import (
     desc,
     func,
 )
-
+from autonomie_celery.conf import get_setting
 from autonomie_celery.models import FileGenerationJob
 from autonomie_celery.tasks import utils
 
@@ -131,8 +131,7 @@ def _get_tmp_directory_path():
     Return the tmp filepath configured in the current configuration
     :param obj request: The pyramid request object
     """
-    registry = celery_app.conf['PYRAMID_REGISTRY']
-    asset_path_spec = registry.settings.get('autonomie.static_tmp')
+    asset_path_spec = get_setting('autonomie.static_tmp', mandatory=True)
     return asset_path_spec
 
 
