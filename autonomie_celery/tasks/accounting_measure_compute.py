@@ -162,6 +162,8 @@ class BaseMeasureCompiler(object):
                 self.store_grid(grid)
                 self.session.add(grid)
                 self.session.flush()
+            else:
+                grid.date = self.upload.date
 
             company_measures = self.get_measures(operation)
 
