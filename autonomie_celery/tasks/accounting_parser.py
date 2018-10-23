@@ -120,6 +120,9 @@ def _mv_file(file_path, queue='processed'):
             file_path,
             new_dir,
         ))
+        return new_file_path
+    else:
+        raise Exception(u"File is missing {}".format(file_path))
 
 
 def _clean_old_operations(old_ids):
@@ -157,8 +160,18 @@ class AccountingDataParser(object):
         self._file_datas = {}
         self._collect_main_file_infos()
         self.basename = self._file_datas['basename']
+        self.company_id_cache = {}
         if hasattr(self, '_collect_specific_file_infos'):
             self._collect_specific_file_infos()
+
+    def _load_company_id_cache(self):
+        query = DBSESSION().query(
+            Company.id, Company.code_compta
+        ).filter(
+            Company.code_compta != None
+        )
+        for id_, code in query:
+            self.company_id_cache[code] = id_
 
     @classmethod
     def match(cls, filename):
@@ -229,12 +242,7 @@ class AccountingDataParser(object):
         :param str analytical_account: The account
         :returns: The company's id
         """
-        query = DBSESSION().query(Company.id)
-        query = query.filter_by(code_compta=analytical_account)
-        result = query.first()
-        if result is not None:
-            result = result[0]
-        return result
+        return self.company_id_cache.get(analytical_account)
 
     def _build_operation_upload_object(self):
         """
@@ -316,6 +324,7 @@ class AccountingDataParser(object):
         :rtype: 2-uple
         """
         if self.force or not self._already_loaded():
+            self._load_company_id_cache()
             old_ids = self._get_existing_operation_ids()
             upload_object = self._build_operation_upload_object()
             operations, missed_associations = self._build_operations()
@@ -580,30 +589,52 @@ def _get_parser_factory(filename):
     return result
 
 
+def _move_file_to_processing(waiting_file):
+    """
+    MOve the waiting file to the processing queue
+
+    :param str waiting_file: The full path to the file to process
+    """
+    logger.info(u" + Moving the file to the processing directory")
+    file_to_parse = _mv_file(waiting_file, "processing")
+    return file_to_parse
+
+
+def _get_recipients_addresses(request):
+    """
+    Retrieve recipients mail adresses
+    :param obj request: The request object
+    :returns: A list of mail adresses
+    """
+    _admin_mail = get_admin_mail()
+    _sysadmin_mail = get_sysadmin_mail()
+    mail_addresses = []
+    if _admin_mail:
+        mail_addresses.append(_admin_mail)
+    if _sysadmin_mail:
+        mail_addresses.append(_sysadmin_mail)
+
+    if mail_addresses:
+        setattr(request, "registry", get_registry())
+    return mail_addresses
+
+
 @celery_app.task(bind=True)
 def handle_pool_task(self, force=False):
     """
     Parse the files present in the configured file pool
     """
     pool_path = _get_path('pool')
-    file_to_parse = _get_file_path_from_pool(pool_path)
+    waiting_file = _get_file_path_from_pool(pool_path)
 
-    if file_to_parse is None:
+    if waiting_file is None:
         return
 
     else:
+        file_to_parse = _move_file_to_processing(waiting_file)
         logger.info(u"Parsing an accounting file : %s" % file_to_parse)
-        _admin_mail = get_admin_mail()
-        _sysadmin_mail = get_sysadmin_mail()
-        mail_addresses = []
-        if _admin_mail:
-            mail_addresses.append(_admin_mail)
-        if _sysadmin_mail:
-            mail_addresses.append(_sysadmin_mail)
 
-        if mail_addresses:
-            setattr(self.request, "registry", get_registry())
-
+        mail_addresses = _get_recipients_addresses(self.request)
         filename = os.path.basename(file_to_parse)
         parser_factory = _get_parser_factory(filename)
         if parser_factory is None:
