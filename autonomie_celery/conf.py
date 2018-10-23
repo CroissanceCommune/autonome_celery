@@ -35,7 +35,7 @@ def get_setting(key, mandatory=False, default=None):
     if mandatory:
         return settings[key]
     else:
-        return settings.get(key, default=default)
+        return settings.get(key, default)
 
 
 def get_sysadmin_mail():
